@@ -292,7 +292,7 @@ func TestCastDriftAndBitrate(t *testing.T) {
 	if g := f.bitrateSpark(20); g == "" {
 		t.Fatal("sparkline should draw from proxied samples")
 	}
-	if r := f.stateRibbon(20); !strings.Contains(r, glMeterOn) {
+	if r := f.stateRibbon(20); !strings.Contains(r, glyphMeterFilled) {
 		t.Fatalf("ribbon should mark playing: %q", r)
 	}
 }

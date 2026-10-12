@@ -270,12 +270,16 @@ func (s *Store) Save() error {
 }
 
 func (s *Store) ToggleFavorite(key string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	cur := s.Cfg.Favorites[key]
 	s.Cfg.Favorites[key] = !cur
 	return !cur
 }
 
 func (s *Store) IsFavorite(key string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.Cfg.Favorites[key]
 }
 
@@ -299,11 +303,18 @@ func (s *Store) GetHistory(key string) (HistoryEntry, bool) {
 }
 
 func (s *Store) AddSource(src Source) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.Cfg.Sources = append(s.Cfg.Sources, src)
 }
 
 func (s *Store) RemoveSource(id string) {
-	out := s.Cfg.Sources[:0]
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	// Fresh slice, not an in-place [:0] filter: callers may still hold the
+	// old backing array (e.g. a ranged copy), which in-place filtering would
+	// silently rewrite under them.
+	out := make([]Source, 0, len(s.Cfg.Sources))
 	for _, src := range s.Cfg.Sources {
 		if src.ID != id {
 			out = append(out, src)
@@ -324,12 +335,123 @@ func (s *Store) RemoveSource(id string) {
 }
 
 func (s *Store) FindSource(id string) *Source {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	// UI goroutine only: the returned pointer aliases the live slice, so it
+	// must not escape to background goroutines (use FindSourceCopy there).
 	for i := range s.Cfg.Sources {
 		if s.Cfg.Sources[i].ID == id {
 			return &s.Cfg.Sources[i]
 		}
 	}
 	return nil
+}
+
+// FindSourceCopy returns a source by value for use off the UI goroutine
+// (background loaders). The interior pointer from FindSource must not escape
+// the UI goroutine: a later AddSource/RemoveSource may reallocate the slice.
+func (s *Store) FindSourceCopy(id string) (Source, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, src := range s.Cfg.Sources {
+		if src.ID == id {
+			return src, true
+		}
+	}
+	return Source{}, false
+}
+
+// Sources returns a snapshot copy of the configured sources for the UI
+// goroutine to range over without holding the lock or aliasing live state.
+func (s *Store) Sources() []Source {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]Source, len(s.Cfg.Sources))
+	copy(out, s.Cfg.Sources)
+	return out
+}
+
+// SourceAt returns the source at idx, or false when out of range.
+func (s *Store) SourceAt(idx int) (Source, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if idx < 0 || idx >= len(s.Cfg.Sources) {
+		return Source{}, false
+	}
+	return s.Cfg.Sources[idx], true
+}
+
+// SourceName returns one source's display name by index.
+func (s *Store) SourceName(idx int) (string, bool) {
+	src, ok := s.SourceAt(idx)
+	if !ok {
+		return "", false
+	}
+	return src.Name, true
+}
+
+// Settings accessors. Callers go through these instead of reaching
+// m.cfg.Cfg.Settings two levels deep (Message Chains): one place defines
+// the fallback policy, and future persistence changes land here.
+func (s *Store) MpvPath() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.Cfg.Settings.MpvPath
+}
+
+func (s *Store) SetMpvPath(p string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Cfg.Settings.MpvPath = p
+}
+
+func (s *Store) MpvArgs() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.Cfg.Settings.MpvArgs
+}
+
+func (s *Store) DefaultUserAgent() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.Cfg.Settings.DefaultUserAgent
+}
+
+func (s *Store) KeepMpvOnQuit() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.Cfg.Settings.KeepMpvOnQuit
+}
+
+func (s *Store) ToggleKeepMpvOnQuit() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Cfg.Settings.KeepMpvOnQuit = !s.Cfg.Settings.KeepMpvOnQuit
+	return s.Cfg.Settings.KeepMpvOnQuit
+}
+
+func (s *Store) Theme() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.Cfg.Settings.Theme
+}
+
+func (s *Store) SetTheme(name string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Cfg.Settings.Theme = name
+}
+
+func (s *Store) CastTV() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.Cfg.Settings.CastTV
+}
+
+func (s *Store) SetCastTV(addr string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Cfg.Settings.CastTV = addr
 }
 
 // RandomID returns a short random identifier for a new source.

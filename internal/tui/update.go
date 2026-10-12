@@ -4,13 +4,10 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
-	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/mertturunc/iptv-tui/internal/player"
 	"github.com/mertturunc/iptv-tui/internal/store"
 )
 
@@ -127,21 +124,8 @@ func isDigit(s string) bool {
 }
 
 func (m *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch m.mode {
-	case modeHelp:
-		return m.helpStep(msg)
-	case modeSearch:
-		return m.searchStep(msg)
-	case modeAdd:
-		return m.addStep(msg)
-	case modeSources:
-		return m.sourcesStep(msg)
-	case modeEpg:
-		return m.epgStep(msg)
-	case modeMpv:
-		return m.mpvStep(msg)
-	case modeCast:
-		return m.castStep(msg)
+	if model, cmd, ok := m.routeKey(msg); ok {
+		return model, cmd
 	}
 
 	switch msg.String() {
@@ -186,14 +170,14 @@ func (m *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "x":
 		stopped := false
 		if m.playing != nil {
-			m.setStatus("stopping "+m.playerName()+glEllipsis, false)
+			m.setStatus("stopping "+m.playerName()+glyphEllipsis, false)
 			m.stopMpv()
 			stopped = true
 		}
 		if m.castForm != nil && m.castForm.caster != nil {
 			// Stop the TV too when both run (mpv first, per README);
 			// a single press ends everything.
-			m.setStatus("stopping TV"+glEllipsis, false)
+			m.setStatus("stopping TV"+glyphEllipsis, false)
 			m.stopCast()
 			stopped = true
 		}
@@ -202,10 +186,10 @@ func (m *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "m":
-		m.cfg.Cfg.Settings.KeepMpvOnQuit = !m.cfg.Cfg.Settings.KeepMpvOnQuit
+		kept := m.cfg.ToggleKeepMpvOnQuit()
 		m.cfg.Save()
 		state := "off"
-		if m.cfg.Cfg.Settings.KeepMpvOnQuit {
+		if kept {
 			state = "on"
 		}
 		m.setStatus("keep mpv running after quit: "+state, false)
@@ -220,22 +204,22 @@ func (m *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.setMediaType(store.Series)
 		return m, nil
 	case "tab":
-		if m.focus == "channels" {
-			m.focus = "groups"
+		if m.focus == focusChannels {
+			m.focus = focusGroups
 		} else {
-			m.focus = "channels"
+			m.focus = focusChannels
 		}
 		return m, nil
 	case "g":
-		m.focus = "groups"
+		m.focus = focusGroups
 		return m, nil
 	case "left", "h":
-		if m.focus == "channels" {
-			m.focus = "groups"
+		if m.focus == focusChannels {
+			m.focus = focusGroups
 		}
 		return m, nil
 	case "right", "l":
-		m.focus = "channels"
+		m.focus = focusChannels
 		return m, nil
 	case "enter":
 		if m.numBuf != "" {
@@ -281,7 +265,7 @@ func (m *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		var cmd tea.Cmd
-		if m.focus == "channels" {
+		if m.focus == focusChannels {
 			m.chList, cmd = m.chList.Update(msg)
 		} else {
 			m.grpList, cmd = m.grpList.Update(msg)
@@ -291,9 +275,9 @@ func (m *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *App) onActivate() (tea.Model, tea.Cmd) {
-	if m.focus == "groups" {
+	if m.focus == focusGroups {
 		m.groupIdx = m.grpList.Index()
-		m.focus = "channels"
+		m.focus = focusChannels
 		m.rebuildChannelItems()
 		return m, nil
 	}
@@ -327,7 +311,7 @@ func (m *App) onPlaySelected() (tea.Model, tea.Cmd) {
 }
 
 func (m *App) selectedChannel() (store.Channel, bool) {
-	if m.focus != "channels" {
+	if m.focus != focusChannels {
 		return store.Channel{}, false
 	}
 	if m.inSeries {
@@ -356,7 +340,7 @@ func (m *App) toggleFavOnSelected() {
 	nowFav := m.cfg.ToggleFavorite(ch.Key)
 	m.cfg.Save()
 	if nowFav {
-		m.setStatus(glStar+" added favorite: "+ch.Name, false)
+		m.setStatus(glyphFavorite+" added favorite: "+ch.Name, false)
 	} else {
 		m.setStatus("removed favorite: "+ch.Name, false)
 	}
@@ -367,14 +351,14 @@ func (m *App) setMediaType(t store.MediaType) {
 	if m.activeIdx < 0 {
 		return
 	}
-	src := &m.cfg.Cfg.Sources[m.activeIdx]
-	if !src.Kind.IsXtream() {
+	src, ok := m.cfg.SourceAt(m.activeIdx)
+	if !ok || !src.Kind.IsXtream() {
 		return
 	}
 	m.mediaType = t
 	m.inSeries = false
 	m.groupIdx = 0
-	m.focus = "channels"
+	m.focus = focusChannels
 	m.rebuildItems()
 }
 
@@ -388,7 +372,7 @@ func (m *App) jumpToNumber() {
 	for i, c := range m.visible {
 		if c.Number == n {
 			m.chList.Select(i)
-			m.setStatus(fmt.Sprintf("jumped to #%d "+glSep+" %s", n, c.Name), false)
+			m.setStatus(fmt.Sprintf("jumped to #%d "+glyphSeparator+" %s", n, c.Name), false)
 			return
 		}
 	}
@@ -405,82 +389,13 @@ func (m *App) onSourceLoaded(v sourceLoadedMsg) {
 	if v.err != nil {
 		m.setStatus("load failed: "+v.err.Error(), true)
 	} else if m.activeIdx == v.idx {
-		m.setStatus("loaded "+m.cfg.Cfg.Sources[v.idx].Name, false)
+		if name, ok := m.cfg.SourceName(v.idx); ok {
+			m.setStatus("loaded "+name, false)
+		}
 	}
 	if m.activeIdx == v.idx {
 		m.rebuildItems()
 	}
-}
-
-func (m *App) onSeriesLoaded(v seriesLoadedMsg) {
-	m.setBusy(false, "")
-	m.inSeries = false
-	if v.err != nil {
-		m.setStatus("series load failed: "+v.err.Error(), true)
-		m.rebuildItems()
-		return
-	}
-	m.episodeChans = v.channels
-	if len(v.channels) == 0 {
-		m.setStatus("no episodes found for "+m.seriesTitle, false)
-		m.rebuildItems()
-		return
-	}
-	m.inSeries = true
-	m.groupIdx = 0
-	m.focus = "channels"
-	m.rebuildItems()
-	m.grpList.Select(0)
-	m.setStatus(fmt.Sprintf("%d episodes", len(v.channels)), false)
-}
-
-// exitSeries leaves the season/episode view and returns to the series list.
-func (m *App) exitSeries() {
-	m.inSeries = false
-	m.episodeChans = nil
-	m.groupIdx = 0
-	m.rebuildItems()
-	m.setStatus("back to series list", false)
-}
-
-func (m *App) onPlayerMsg(v playerMsg) {
-	m.setBusy(false, "")
-	if v.err != nil {
-		m.setStatus("mpv error: "+v.err.Error(), true)
-		return
-	}
-	p := v.proc
-	m.playing = p
-	m.playingCh = v.ch
-	ch := v.ch
-	p.OnLog = func(line string, isErr bool) {
-		m.send(playerLogMsg{line: line, isErr: isErr})
-	}
-	p.OnExit = func() {
-		m.send(playerExitedMsg{ch: ch, proc: p})
-	}
-	label := playLabel(ch)
-	m.setStatus(glPlay+" "+v.proc.PlayerName()+": "+label, false)
-}
-
-func (m *App) onPlayerLog(v playerLogMsg) {
-	if v.isErr {
-		m.setStatus(m.playerName()+": "+ellipsize(v.line, 90), true)
-	}
-}
-
-func (m *App) onPlayerExited(v playerExitedMsg) {
-	pos, dur := v.proc.Position()
-	if pos > 0 {
-		m.cfg.RecordPosition(v.ch.Key, pos, dur)
-	}
-	m.cfg.Save()
-	if m.playing == v.proc {
-		m.playing = nil
-		m.playingCh = store.Channel{}
-		m.playPos, m.playDur = 0, 0
-	}
-	m.setStatus("mpv closed"+withPos(pos), false)
 }
 
 // helpStep drives the help sheet. Left/right preview the palette ring in
@@ -513,7 +428,7 @@ func (m *App) searchStep(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		m.mode = modeMain
 		m.searchIn.Blur()
-		m.focus = "channels"
+		m.focus = focusChannels
 		m.rebuildItems()
 		return m, nil
 	}
@@ -522,220 +437,4 @@ func (m *App) searchStep(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	m.searchFilter = strings.TrimSpace(m.searchIn.Value())
 	m.rebuildItems()
 	return m, cmd
-}
-
-func (m *App) addStep(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if msg.String() == "k" {
-		kind := store.SourceM3U
-		if m.addForm.kind == store.SourceM3U {
-			kind = store.SourceXtream
-		}
-		m.openAdd(kind)
-		return m, nil
-	}
-	res, cmd := m.addForm.Update(msg)
-	if res.cancelled {
-		m.mode = modeMain
-		return m, nil
-	}
-	if res.submitted {
-		if res.src.Kind.IsM3U() && res.src.URL == "" || res.src.Kind.IsXtream() && res.src.Server == "" {
-			m.setStatus("incomplete source "+glDash+" fill the required fields", true)
-			return m, nil
-		}
-		m.cfg.AddSource(res.src)
-		m.loaded = append(m.loaded, nil)
-		m.cfg.Save()
-		idx := len(m.loaded) - 1
-		m.mode = modeMain
-		m.selectSource(idx)
-		m.startSourceLoad(idx)
-		m.setStatus("added source "+res.src.Name, false)
-		return m, nil
-	}
-	return m, cmd
-}
-
-func (m *App) sourcesStep(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc":
-		m.mode = modeMain
-		return m, nil
-	case "a":
-		m.openAdd(store.SourceM3U)
-		return m, nil
-	case "enter":
-		if item, ok := m.srcOverlay.SelectedItem().(sourceListItem); ok {
-			m.selectSource(item.idx)
-			m.mode = modeMain
-		}
-		return m, nil
-	case "r":
-		if item, ok := m.srcOverlay.SelectedItem().(sourceListItem); ok {
-			m.startSourceLoad(item.idx)
-			m.setStatus("reloading "+m.cfg.Cfg.Sources[item.idx].Name, false)
-		}
-		return m, nil
-	case "d":
-		if item, ok := m.srcOverlay.SelectedItem().(sourceListItem); ok {
-			m.deleteSource(item.idx)
-		}
-		return m, nil
-	}
-	var cmd tea.Cmd
-	nu, cmd := m.srcOverlay.Update(msg)
-	m.srcOverlay = &nu
-	return m, cmd
-}
-
-func (m *App) deleteSource(idx int) {
-	name := m.cfg.Cfg.Sources[idx].Name
-	m.cfg.RemoveSource(m.cfg.Cfg.Sources[idx].ID)
-	m.loaded = append(m.loaded[:idx], m.loaded[idx+1:]...)
-	if m.activeIdx == idx {
-		m.activeIdx = -1
-	}
-	if m.activeIdx > idx {
-		m.activeIdx--
-	}
-	m.cfg.Save()
-	m.mode = modeSources
-	items := m.buildSourceItems()
-	if len(items) > 0 {
-		m.srcOverlay.SetItems(items)
-		m.srcOverlay.Select(0)
-	} else {
-		m.mode = modeMain
-		m.setStatus("no sources left "+glDash+" press a to add one", false)
-	}
-	m.rebuildItems()
-	m.setStatus("deleted source "+name, false)
-}
-
-func (m *App) epgStep(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc":
-		m.mode = modeMain
-		return m, nil
-	case "up":
-		if m.epg.scroll > 0 {
-			m.epg.scroll--
-		}
-		return m, nil
-	case "down":
-		if m.epg.scroll < len(m.epg.progs)-1 {
-			m.epg.scroll++
-		}
-		return m, nil
-	case "ctrl+c":
-		m.flushAndSave()
-		return m, tea.Quit
-	}
-	return m, nil
-}
-
-// mpvStep drives the player setup form. Enter saves a pasted binary path (an
-// empty field just re-checks, in case mpv was installed meanwhile); esc skips
-// and leaves browsing working without playback.
-func (m *App) mpvStep(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc":
-		m.mode = modeMain
-		m.setStatus("player setup skipped "+glDash+" press enter on a channel to retry", false)
-		return m, nil
-	case "enter":
-		if path := strings.TrimSpace(m.mpvForm.path.Value()); path != "" {
-			m.cfg.Cfg.Settings.MpvPath = path
-			m.cfg.Save()
-		}
-		if exe, kind, ok := player.Detect(m.cfg.Cfg.Settings.MpvPath); ok {
-			m.mode = modeMain
-			m.setStatus(string(kind)+": "+exe, false)
-		} else {
-			m.setStatus("still no player found "+glDash+" install mpv or paste its full path", true)
-		}
-		return m, nil
-	}
-	return m, m.mpvForm.Update(msg)
-}
-
-// ---------- sources overlay helpers ----------
-
-func (m *App) openSources() {
-	if m.srcOverlay == nil {
-		nl := list.New(nil, groupDelegate(colSignal, true), 40, 10)
-		m.srcOverlay = &nl
-		m.srcOverlay.SetFilteringEnabled(false)
-		m.srcOverlay.SetShowHelp(false)
-		m.srcOverlay.SetShowStatusBar(false)
-	}
-	// Re-chrome on every open, not just the first: the overlay holds focus
-	// outright and wears the same chrome as the rails (signal badge, none of
-	// the bubbles status/help bars) — in the CURRENT palette, which may have
-	// changed since the overlay was built.
-	m.srcOverlay.SetDelegate(groupDelegate(colSignal, true))
-	srcStyles := m.srcOverlay.Styles
-	srcStyles.Title = paneTitleStyle(colSignal, true)
-	m.srcOverlay.Styles = srcStyles
-	// Totals belong in the title, as they do on the channel rail, and the count
-	// has to be restated here because sources can be added while this is open.
-	m.srcOverlay.Title = "SOURCES " + glSep + " " + fmt.Sprint(len(m.cfg.Cfg.Sources))
-	m.srcOverlay.SetItems(m.buildSourceItems())
-	if m.activeIdx >= 0 && m.activeIdx < len(m.cfg.Cfg.Sources) {
-		m.srcOverlay.Select(m.activeIdx)
-	}
-	m.mode = modeSources
-	m.layout()
-}
-
-func (m *App) buildSourceItems() []list.Item {
-	items := make([]list.Item, 0, len(m.cfg.Cfg.Sources))
-	for i := range m.cfg.Cfg.Sources {
-		src := m.cfg.Cfg.Sources[i]
-		loaded := i < len(m.loaded) && m.loaded[i] != nil && m.loaded[i].LoadErr == nil
-		items = append(items, sourceListItem{src: src, idx: i, load: !loaded})
-	}
-	return items
-}
-
-func (m *App) openAdd(kind store.SourceKind) {
-	m.addForm = newAddForm(kind, m.width-10)
-	m.mode = modeAdd
-	m.layout()
-}
-
-// openMpvSetup shows the player setup form: no mpv, VLC, or MPC-HC was found,
-// so playback needs either an install or an explicit binary path.
-func (m *App) openMpvSetup() {
-	m.mpvForm = newMpvForm(m.width - 10)
-	m.mode = modeMpv
-	m.layout()
-	m.setStatus("no player found "+glDash+" install mpv or set its path", true)
-}
-
-// playerName names the running backend for status lines.
-func (m *App) playerName() string {
-	if m.playing != nil {
-		return m.playing.PlayerName()
-	}
-	return "mpv"
-}
-
-func (m *App) stopMpvIfNotKept() {
-	if m.playing == nil || m.cfg.Cfg.Settings.KeepMpvOnQuit {
-		return
-	}
-	pos, dur := m.playing.Position()
-	if pos > 0 {
-		m.cfg.RecordPosition(m.playingCh.Key, pos, dur)
-		m.cfg.Save()
-	}
-	m.playing.Stop()
-}
-
-func withPos(d time.Duration) string {
-	if d <= 0 {
-		return ""
-	}
-	return fmt.Sprintf(" at %02d:%02d", int(d/time.Minute), int(d/time.Second)%60)
 }

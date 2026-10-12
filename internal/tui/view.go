@@ -117,10 +117,10 @@ func (m *App) layout() {
 
 func (m *App) channelPaneTitle() string {
 	if m.inSeries {
-		t := "EPISODES " + glSep + " " + ellipsize(m.seriesTitle, 24)
+		t := "EPISODES " + glyphSeparator + " " + ellipsize(m.seriesTitle, 24)
 		if m.groupIdx >= 0 && m.groupIdx < len(m.groupEntries) {
-			if e := m.groupEntries[m.groupIdx]; e.kind == "season" {
-				t += " " + glSep + " " + ellipsize(e.label, 12)
+			if e := m.groupEntries[m.groupIdx]; e.kind == groupKindSeason {
+				t += " " + glyphSeparator + " " + ellipsize(e.label, 12)
 			}
 		}
 		return t
@@ -142,46 +142,25 @@ func (m *App) channelPaneTitle() string {
 	}
 	readout := ""
 	if chNum > 0 {
-		readout = "CH" + glCursor + fmt.Sprintf("%03d", chNum) + "  "
+		readout = "CH" + glyphCursor + fmt.Sprintf("%03d", chNum) + "  "
 	} else if m.numBuf != "" {
-		readout = "CH" + glCursor + m.numBuf + "_  "
+		readout = "CH" + glyphCursor + m.numBuf + "_  "
 	}
 	label = strings.ToUpper(label)
-	return readout + fmt.Sprintf("%s %s %s %s %d", mediaLabel(m.mediaType), glSep, label, glSep, len(m.visible))
+	return readout + fmt.Sprintf("%s %s %s %s %d", mediaLabel(m.mediaType), glyphSeparator, label, glyphSeparator, len(m.visible))
 }
 
 func (m *App) chPaneWidth() int { return m.chW }
 
 func (m *App) View() string {
 	if !m.ready {
-		return paintFrame(m.spinner.View() + " iptv-tui" + glEllipsis)
+		return paintFrame(m.spinner.View() + " iptv-tui" + glyphEllipsis)
 	}
 	m.layout()
 	body := m.renderMain()
 	frame := m.bodyH()
-	switch m.mode {
-	case modeHelp:
-		body = placeOverlay(helpView(m.width-16, frame-2), m.width, frame)
-	case modeSources:
-		if m.srcOverlay != nil {
-			body = placeOverlay(m.srcOverlay.View(), m.width, frame)
-		}
-	case modeAdd:
-		if m.addForm != nil {
-			body = placeOverlay(m.addForm.View(m.width-8, frame-2), m.width, frame)
-		}
-	case modeEpg:
-		if m.epg != nil {
-			body = placeOverlay(m.epg.View(m.width-8, frame-4), m.width, frame)
-		}
-	case modeMpv:
-		if m.mpvForm != nil {
-			body = placeOverlay(m.mpvForm.View(m.width-8, frame-2), m.width, frame)
-		}
-	case modeCast:
-		if m.castForm != nil {
-			body = placeOverlay(m.castForm.View(m.width-8, frame-2), m.width, frame)
-		}
+	if ov := m.overlayFor(frame); ov != "" {
+		body = placeOverlay(ov, m.width, frame)
 	}
 	out := lipgloss.JoinVertical(lipgloss.Top, m.renderHeader(), body, m.renderPlaybar(), m.renderFooter())
 	if m.margin > 0 {
@@ -437,11 +416,11 @@ func (m *App) renderHeader() string {
 		Foreground(colInk).
 		Background(colFace).
 		Padding(0, 1).
-		Render(glMark + " IPTVTUI " + glMark)
+		Render(glyphFlag + " IPTVTUI " + glyphFlag)
 	left = append(left, nameplate)
-	hasActive := m.activeIdx >= 0 && m.activeIdx < len(m.cfg.Cfg.Sources)
+	active, hasActive := m.cfg.SourceAt(m.activeIdx)
 	if hasActive {
-		name := ellipsize(m.cfg.Cfg.Sources[m.activeIdx].Name, 18)
+		name := ellipsize(active.Name, 18)
 		chip := lipgloss.NewStyle().
 			Bold(true).
 			Foreground(colGround).
@@ -450,7 +429,7 @@ func (m *App) renderHeader() string {
 			Render(name)
 		left = append(left, chip)
 	}
-	if hasActive && m.cfg.Cfg.Sources[m.activeIdx].Kind.IsXtream() && m.width >= 64 {
+	if hasActive && active.Kind.IsXtream() && m.width >= 64 {
 		for _, t := range []store.MediaType{store.Live, store.Movie, store.Series} {
 			if m.mediaType == t {
 				left = append(left, sigBold(hue, " "+mediaLabel(t)+" "))
@@ -463,14 +442,14 @@ func (m *App) renderHeader() string {
 	padded := lipgloss.NewStyle().Width(m.width).Render(line1)
 	line2 := m.renderHeaderLine2()
 	// Hairline under the header: 1px rule across the full width.
-	rule := headendRule.Width(m.width).Render(strings.Repeat(glRuleH, m.width))
+	rule := headendRule.Width(m.width).Render(strings.Repeat(glyphHorizontalRule, m.width))
 	return lipgloss.JoinVertical(lipgloss.Top, padded, line2, rule)
 }
 
 func (m *App) renderHeaderLine2() string {
 	hue := m.signal()
 	var chips []string
-	chips = append(chips, " focus: "+m.focus)
+	chips = append(chips, " focus: "+string(m.focus))
 	if m.numBuf != "" {
 		chips = append(chips, sig(hue, " #"+m.numBuf+"_"))
 	}
@@ -482,13 +461,13 @@ func (m *App) renderHeaderLine2() string {
 }
 
 func (m *App) renderMain() string {
-	if len(m.cfg.Cfg.Sources) == 0 {
+	if len(m.cfg.Sources()) == 0 {
 		msg := "\n No sources yet.\n\n press a to add an M3U playlist or Xtream portal\n press ? for help\n "
 		return panelBox(m.width, m.bodyH(), panelStyle.Bold(true).Render(msg))
 	}
 	ld := m.activeLoaded()
 	if ld == nil {
-		return panelBox(m.width, m.bodyH(), m.spinner.View()+" loading source"+glEllipsis)
+		return panelBox(m.width, m.bodyH(), m.spinner.View()+" loading source"+glyphEllipsis)
 	}
 	if ld.LoadErr != nil && len(ld.Channels[store.Live]) == 0 && len(ld.Channels[store.Movie]) == 0 {
 		return panelBox(m.width, m.bodyH(), failure("load error: "+ld.LoadErr.Error()))
@@ -507,8 +486,8 @@ func (m *App) renderMain() string {
 	ch = fitPane(ch, m.chW)
 	// The rule between the rails carries the signal while the channel rail has
 	// focus, so the boundary reads as part of the live side of the console.
-	sep := paneRuleStyle(m.signal(), m.focus != "groups")
-	body := lipgloss.JoinHorizontal(lipgloss.Top, grp, sep.Render(" "+glRuleV+" "), ch)
+	sep := paneRuleStyle(m.signal(), m.focus != focusGroups)
+	body := lipgloss.JoinHorizontal(lipgloss.Top, grp, sep.Render(" "+glyphVerticalRule+" "), ch)
 	return lipgloss.NewStyle().Width(m.width).Render(body)
 }
 
@@ -560,30 +539,30 @@ func keyHintString(hints []keyHint) string {
 	for i, h := range hints {
 		parts[i] = h.key + " " + h.label
 	}
-	return strings.Join(parts, " "+glSep+" ")
+	return strings.Join(parts, " "+glyphSeparator+" ")
 }
 
 func (m *App) mainKeyHints() []keyHint {
 	switch {
 	case m.width < 60:
 		return []keyHint{
-			{glUpDown, "nav"}, {"enter", "play"}, {"/", "search"}, {"f", "fav"},
+			{glyphArrowUpDown, "nav"}, {"enter", "play"}, {"/", "search"}, {"f", "fav"},
 			{"s", "sources"}, {"?", "help"}, {"q", "quit"},
 		}
 	case m.width < 90:
 		return []keyHint{
-			{glUpDown, "nav"}, {"enter", "play"}, {"/", "search"}, {"f", "fav"},
+			{glyphArrowUpDown, "nav"}, {"enter", "play"}, {"/", "search"}, {"f", "fav"},
 			{"e", "epg"}, {"s", "sources"}, {"r", "reload"}, {"x", "stop"}, {"?", "help"}, {"q", "quit"},
 		}
 	case m.width < 120:
 		return []keyHint{
-			{glUpDown, "nav"}, {"enter", "play"}, {"/", "search"}, {"f", "fav"},
+			{glyphArrowUpDown, "nav"}, {"enter", "play"}, {"/", "search"}, {"f", "fav"},
 			{"e", "epg"}, {"s", "sources"}, {"a", "add"}, {"r", "reload"}, {"x", "stop"},
 			{"1-3", "tabs"}, {"?", "help"}, {"q", "quit"},
 		}
 	default:
 		return []keyHint{
-			{glUpDown, "nav"}, {"enter", "play"}, {"/", "search"}, {"f", "fav"},
+			{glyphArrowUpDown, "nav"}, {"enter", "play"}, {"/", "search"}, {"f", "fav"},
 			{"e", "epg"}, {"s", "sources"}, {"a", "add"}, {"r", "reload"}, {"x", "stop"},
 			{"1-3", "tabs"}, {"m", "keep-mpv"}, {"?", "help"}, {"q", "quit"},
 		}
@@ -597,7 +576,7 @@ func (m *App) keyHints() string { return keyHintString(m.mainKeyHints()) }
 // Hints that would overflow the terminal width are dropped, not wrapped.
 func (m *App) styledHints(hints []keyHint) string {
 	hue := m.signal()
-	sep := muted(" " + glSep + " ")
+	sep := muted(" " + glyphSeparator + " ")
 	var parts []string
 	w := 0
 	for _, h := range hints {
@@ -619,25 +598,7 @@ func (m *App) styledHints(hints []keyHint) string {
 }
 
 func (m *App) renderFooter() string {
-	var hints []keyHint
-	switch m.mode {
-	case modeSearch:
-		hints = []keyHint{{"type", "filter"}, {"enter", "done"}, {"esc", "clear"}}
-	case modeAdd:
-		hints = []keyHint{{"enter", "next/submit"}, {glUpDown, "move"}, {"k", "toggle m3u/xtream"}, {"esc", "cancel"}}
-	case modeSources:
-		hints = []keyHint{{"enter", "select"}, {"a", "add"}, {"r", "reload"}, {"d", "delete"}, {"esc", "back"}}
-	case modeEpg:
-		hints = []keyHint{{glUpDown, "scroll"}, {"esc", "back"}}
-	case modeHelp:
-		hints = []keyHint{{"esc", "back"}}
-	case modeMpv:
-		hints = []keyHint{{"enter", "save path"}, {"esc", "skip"}}
-	case modeCast:
-		hints = []keyHint{{"enter", "cast"}, {"up/down", "pick TV"}, {"r", "rescan"}, {"esc", "back (x stops TV)"}}
-	default:
-		hints = m.mainKeyHints()
-	}
+	hints := m.footerHints()
 	line1 := lipgloss.NewStyle().Width(m.width).Render(m.styledHints(hints))
 	status := m.status
 	if m.statusErr {
@@ -668,15 +629,6 @@ func clock(d time.Duration) string {
 	return fmt.Sprintf("%d:%02d", mnt, sec)
 }
 
-// playLabel names what mpv is playing, folding a series episode into its
-// SxxExx code the way the rack labels channels.
-func playLabel(ch store.Channel) string {
-	if ch.Season > 0 {
-		return fmt.Sprintf("S%02dE%02d %s", ch.Season, ch.Episode, ch.Name)
-	}
-	return ch.Name
-}
-
 // renderPlaybar is the always-reserved meter above the status strip. The row
 // is furniture for the console whether or not anything is playing, so the
 // rails never jump a row when playback starts; what changes is the readout.
@@ -691,13 +643,13 @@ func playLabel(ch store.Channel) string {
 func (m *App) renderPlaybar() string {
 	if m.playing == nil && (m.castForm == nil || !m.castForm.casting) {
 		return lipgloss.NewStyle().Width(m.width).Render(
-			headendRule.Render(glPlay) + " " + muted("no signal"))
+			headendRule.Render(glyphPlaying) + " " + muted("no signal"))
 	}
 	if m.playing == nil {
 		// A cast outlives the terminal session: the strip names the TV and
 		// what it is showing while no local player runs, with the receiver
 		// state and measured bitrate when samples have arrived.
-		left := success(glPlay) + " TV " + glSep + " " +
+		left := success(glyphPlaying) + " TV " + glyphSeparator + " " +
 			ellipsize(m.castForm.title, clamp(m.width/3, 12, 30))
 		var rp []string
 		if s, ok := m.castForm.latest(); ok {
@@ -723,7 +675,7 @@ func (m *App) renderPlaybar() string {
 	// one authority and never disagrees with itself between frames.
 	pos, dur := m.playPos, m.playDur
 
-	left := success(glPlay) + " " + ellipsize(playLabel(m.playingCh), clamp(m.width/3, 12, 30))
+	left := success(glyphPlaying) + " " + ellipsize(playLabel(m.playingCh), clamp(m.width/3, 12, 30))
 
 	// Tabular readout, held against the right edge like every other number in
 	// this room. A stream that reports no duration has nothing to measure, so
@@ -739,7 +691,7 @@ func (m *App) renderPlaybar() string {
 		// mpv should report here; silence means the IPC link is not up yet
 		// (or never came up). VLC/MPC-HC have no link by design, and live
 		// has nothing to measure, so neither may claim to be linking.
-		right = muted("waiting for player" + glEllipsis)
+		right = muted("waiting for player" + glyphEllipsis)
 	}
 
 	row := left
@@ -777,6 +729,6 @@ func (m *App) progressMeter(w int, frac float64, hue lipgloss.Color) string {
 	if filled > w {
 		filled = w
 	}
-	return sigBold(hue, strings.Repeat(glMeterOn, filled)) +
-		headendRule.Render(strings.Repeat(glMeterOff, w-filled))
+	return sigBold(hue, strings.Repeat(glyphMeterFilled, filled)) +
+		headendRule.Render(strings.Repeat(glyphMeterEmpty, w-filled))
 }

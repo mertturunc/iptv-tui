@@ -16,6 +16,18 @@ func TestEnabled(t *testing.T) {
 	if !Enabled() {
 		t.Fatal("1 must enable")
 	}
+	for _, v := range []string{"true", "yes", "on", " TRUE ", "On"} {
+		t.Setenv("IPTV_TUI_DEBUG", v)
+		if !Enabled() {
+			t.Fatalf("%q must enable", v)
+		}
+	}
+	for _, v := range []string{"0", "false", "off", "no", "banana", "2", "maybe"} {
+		t.Setenv("IPTV_TUI_DEBUG", v)
+		if Enabled() {
+			t.Fatalf("%q must not enable", v)
+		}
+	}
 }
 
 func TestShortURLStripsSecrets(t *testing.T) {

@@ -119,14 +119,14 @@ func (f *castForm) View(width, height int) string {
 	fmt.Fprintf(&b, "%s\n\n", panelStyle.Bold(true).Render("send to TV"))
 	switch {
 	case f.scanning && len(f.found) == 0:
-		fmt.Fprintf(&b, "  %s\n", "looking for TVs on your network"+glEllipsis)
+		fmt.Fprintf(&b, "  %s\n", "looking for TVs on your network"+glyphEllipsis)
 	case len(f.found) == 0:
-		fmt.Fprintf(&b, "  %s\n", dim("no TVs answered "+glDash+" type the address below"))
+		fmt.Fprintf(&b, "  %s\n", dim("no TVs answered "+glyphDash+" type the address below"))
 	default:
 		for i, d := range f.found {
 			marker := "  "
 			if i == f.sel {
-				marker = sig(colSignal, glCursor) + " "
+				marker = sig(colSignal, glyphCursor) + " "
 			}
 			fmt.Fprintf(&b, "  %s%s\n", marker, ellipsize(d.Name+" ("+d.Addr+")", width-6))
 		}
@@ -135,7 +135,7 @@ func (f *castForm) View(width, height int) string {
 	if f.hasPending {
 		fmt.Fprintf(&b, "\n  %s\n", ellipsize("for: "+playLabel(f.pending), width-4))
 	} else {
-		fmt.Fprintf(&b, "\n  %s\n", "no channel pinned "+glDash+" esc back, pick one, press C")
+		fmt.Fprintf(&b, "\n  %s\n", "no channel pinned "+glyphDash+" esc back, pick one, press C")
 	}
 	if f.target.Addr != "" {
 		fmt.Fprintf(&b, "\n  %s\n", ellipsize("target: "+f.target.Name+" ("+f.target.Addr+")", width-4))
@@ -149,14 +149,14 @@ func (f *castForm) View(width, height int) string {
 		fmt.Fprintf(&b, "  %s\n", ellipsize("last TV: "+f.lastAddr, width-4))
 	}
 	if f.busy {
-		fmt.Fprintf(&b, "\n  %s\n", "talking to TV"+glEllipsis)
+		fmt.Fprintf(&b, "\n  %s\n", "talking to TV"+glyphEllipsis)
 	}
 	fmt.Fprintf(&b, "\n  %s", dim("proxied: TV pulls through here, headers work, bitrate measured."))
 	fmt.Fprintf(&b, "\n  %s", dim("direct (DASH): TV pulls the origin itself, no headers, no bitrate."))
 	content := b.String()
 	_ = height
 	return panelBox(width, lipgloss.Height(content)+2,
-		content+"\n  "+dim("enter="+f.enterHint()+"  "+glUpDown+"=pick  r=rescan  esc=back  (x stops TV)"))
+		content+"\n  "+dim("enter="+f.enterHint()+"  "+glyphArrowUpDown+"=pick  r=rescan  esc=back  (x stops TV)"))
 }
 
 // statsView renders the buffer dashboard: receiver state in text, then the
@@ -167,7 +167,7 @@ func (f *castForm) View(width, height int) string {
 func (f *castForm) statsView(room int) string {
 	s, ok := f.latest()
 	if !ok {
-		return "  " + dim("waiting for first stats"+glEllipsis) + "\n"
+		return "  " + dim("waiting for first stats"+glyphEllipsis) + "\n"
 	}
 	var b strings.Builder
 	pos := clock(time.Duration(s.pos * float64(time.Second)))
@@ -182,7 +182,7 @@ func (f *castForm) statsView(room int) string {
 	} else if f.direct || f.proxy == nil {
 		second = "direct cast: no bitrate"
 	} else {
-		second = "measuring bitrate" + glEllipsis
+		second = "measuring bitrate" + glyphEllipsis
 	}
 	if d, ok := f.drift(); ok && s.state == "PLAYING" {
 		second += fmt.Sprintf("   drift %+.1fs", d)
@@ -198,7 +198,7 @@ func (f *castForm) statsView(room int) string {
 		pulls := f.proxy.Requests()
 		via := fmt.Sprintf("via %s   TV pulls %d", f.proxy.BaseURL(), pulls)
 		if pulls == 0 {
-			via += "   " + "TV hasn't pulled yet " + glDash + " allow the firewall / check network"
+			via += "   " + "TV hasn't pulled yet " + glyphDash + " allow the firewall / check network"
 		}
 		fmt.Fprintf(&b, "  %s\n", ellipsize(via, room))
 	}
@@ -244,11 +244,11 @@ func (f *castForm) stateRibbon(room int) string {
 	for _, s := range f.samples[len(f.samples)-n:] {
 		switch s.state {
 		case "PLAYING":
-			b.WriteString(sig(colSignal, glMeterOn))
+			b.WriteString(sig(colSignal, glyphMeterFilled))
 		case "BUFFERING":
 			b.WriteString(failure("!"))
 		default:
-			b.WriteString(glMeterOff)
+			b.WriteString(glyphMeterEmpty)
 		}
 	}
 	return b.String()
@@ -258,7 +258,7 @@ func (f *castForm) stateRibbon(room int) string {
 // Direct casts have no byte counts, so they get no graph rather than a
 // flat line that would read as a dead stream.
 func (f *castForm) bitrateSpark(room int) string {
-	bars := []rune(glBars)
+	bars := []rune(glyphSparkLevels)
 	n := len(f.samples)
 	if f.proxy == nil || n < 2 || len(bars) == 0 {
 		return ""
@@ -337,7 +337,7 @@ type castStopMsg struct{ err error }
 // channel under the cursor is pinned to the sheet, so enter casts it no
 // matter which pane holds focus afterwards.
 func (m *App) openCast() {
-	m.castForm = newCastForm(m.width-10, m.cfg.Cfg.Settings.CastTV)
+	m.castForm = newCastForm(m.width-10, m.cfg.CastTV())
 	if ch, ok := m.selectedChannel(); ok {
 		m.castForm.pending, m.castForm.hasPending = ch, true
 	}
@@ -381,7 +381,7 @@ func (m *App) onScanMsg(v castScanMsg) {
 		f.scanning = false
 	}
 	if v.err != nil {
-		f.scanNote = "scan failed " + glDash + " type the address"
+		f.scanNote = "scan failed " + glyphDash + " type the address"
 		return
 	}
 	if v.devices == nil {
@@ -395,7 +395,7 @@ func (m *App) onScanMsg(v castScanMsg) {
 	f.found = v.devices
 	if len(f.found) == 0 {
 		if v.done {
-			f.scanNote = "no TVs answered " + glDash + " type the address"
+			f.scanNote = "no TVs answered " + glyphDash + " type the address"
 		}
 		f.sel = -1
 		return
@@ -446,7 +446,7 @@ func (m *App) castTarget() (addr string, dev cast.Device, haveDev, ok bool) {
 		return f.lastAddr, cast.Device{}, false, true
 	}
 	if f.scanning {
-		m.setStatus("still looking "+glDash+" wait for the list or type the address", true)
+		m.setStatus("still looking "+glyphDash+" wait for the list or type the address", true)
 	} else {
 		m.setStatus("pick a TV or type its address first", true)
 	}
@@ -461,7 +461,7 @@ func (m *App) startCast(ch store.Channel) {
 		return
 	}
 	if m.castForm.busy {
-		m.setStatus("talking to TV "+glDash+" wait a moment", false)
+		m.setStatus("talking to TV "+glyphDash+" wait a moment", false)
 		dbg.Log("tui: cast refused while busy")
 		return
 	}
@@ -549,7 +549,7 @@ func (m *App) stopCast() {
 		return
 	}
 	if f.busy {
-		m.setStatus("talking to TV "+glDash+" wait a moment", false)
+		m.setStatus("talking to TV "+glyphDash+" wait a moment", false)
 		dbg.Log("tui: stop refused while busy")
 		return
 	}
@@ -608,10 +608,10 @@ func (m *App) onCastDone(v castDoneMsg) tea.Cmd {
 	m.castForm.stalls = 0
 	m.castForm.baseSet = false
 	m.castForm.statErr = ""
-	m.cfg.Cfg.Settings.CastTV = v.addr
+	m.cfg.SetCastTV(v.addr)
 	m.cfg.Save()
 	dbg.Log("tui: cast ok: %q on %s (%s) via %s", v.title, v.name, v.addr, viaDesc(v.proxy))
-	m.setStatus(glPlay+" on TV ("+v.name+"): "+v.title, false)
+	m.setStatus(glyphPlaying+" on TV ("+v.name+"): "+v.title, false)
 	return castTick()
 }
 
@@ -745,7 +745,7 @@ func (m *App) castStep(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		ch, ok := m.castChannel()
 		if !ok {
-			m.setStatus("no channel pinned "+glDash+" esc back, pick one, press c", true)
+			m.setStatus("no channel pinned "+glyphDash+" esc back, pick one, press c", true)
 			return m, nil
 		}
 		m.startCast(ch)

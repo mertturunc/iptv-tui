@@ -100,11 +100,28 @@ const (
 	modeCast
 )
 
+type groupKind string
+
+const (
+	groupKindAll    groupKind = "all"
+	groupKindFav    groupKind = "fav"
+	groupKindGroup  groupKind = "group"
+	groupKindSeason groupKind = "season"
+)
+
 type groupEntry struct {
 	label string
 	count int
-	kind  string // "all" | "fav" | "group"
+	kind  groupKind
 }
+
+// paneFocus names which rail takes the next keystroke.
+type paneFocus string
+
+const (
+	focusChannels paneFocus = "channels"
+	focusGroups   paneFocus = "groups"
+)
 
 type App struct {
 	cfg  *store.Store
@@ -127,7 +144,7 @@ type App struct {
 
 	chList  list.Model
 	grpList list.Model
-	focus   string // "groups" | "channels"
+	focus   paneFocus
 
 	mode mode
 
@@ -167,7 +184,7 @@ type App struct {
 	// chromeHue/chromeFocus remember what applyChrome last painted so it can
 	// skip the repaint when neither the source hue nor the focus moved.
 	chromeHue   string
-	chromeFocus string
+	chromeFocus paneFocus
 
 	// playPos/playDur are the last position mpv reported, refreshed on a tick
 	// while playback runs so the now-playing strip advances.
@@ -182,19 +199,19 @@ func New(cfg *store.Store) *App {
 		activeIdx: -1,
 		mediaType: store.Live,
 		favs:      map[string]bool{},
-		focus:     "channels",
+		focus:     focusChannels,
 		status:    "welcome",
 	}
 	m.chList = list.New(nil, channelDelegate(colSignal, true), 40, 20)
 	m.grpList = list.New(nil, groupDelegate(colSignal, false), 24, 20)
 	// bubbles hardcodes the pagination dots, but it does expose them, so the
 	// filled mark and the hollow one can come from our token table like the rest.
-	m.chList.Paginator.ActiveDot = glMark
-	m.chList.Paginator.InactiveDot = glSlot
-	m.grpList.Paginator.ActiveDot = glMark
-	m.grpList.Paginator.InactiveDot = glSlot
+	m.chList.Paginator.ActiveDot = glyphFlag
+	m.chList.Paginator.InactiveDot = glyphEmptySlot
+	m.grpList.Paginator.ActiveDot = glyphFlag
+	m.grpList.Paginator.InactiveDot = glyphEmptySlot
 	m.searchIn = textinput.New()
-	m.searchIn.Placeholder = "Filter channels" + glEllipsis
+	m.searchIn.Placeholder = "Filter channels" + glyphEllipsis
 	m.searchIn.Width = 40
 	m.spinner = spinner.New()
 	m.spinner.Spinner = spinner.Dot
@@ -205,11 +222,13 @@ func New(cfg *store.Store) *App {
 	m.epg = &epgView{}
 	m.chList.SetFilteringEnabled(false)
 	m.grpList.SetFilteringEnabled(false)
-	m.loaded = make([]*store.Loaded, len(cfg.Cfg.Sources))
+	m.loaded = make([]*store.Loaded, len(cfg.Sources()))
 	return m
 }
 
-func channelDelegate(hue lipgloss.Color, focused bool) list.ItemDelegate {
+// baseDelegate builds the shared rail chrome: single-line rows, no
+// descriptions, signal selection bar, dimmed graphite for the rest.
+func baseDelegate(hue lipgloss.Color, focused bool) list.DefaultDelegate {
 	d := list.NewDefaultDelegate()
 	d.SetHeight(1)
 	d.ShowDescription = false
@@ -222,6 +241,10 @@ func channelDelegate(hue lipgloss.Color, focused bool) list.ItemDelegate {
 	s.FilterMatch = s.FilterMatch.Foreground(colSignal).Bold(true)
 	d.Styles = s
 	return d
+}
+
+func channelDelegate(hue lipgloss.Color, focused bool) list.ItemDelegate {
+	return baseDelegate(hue, focused)
 }
 
 // Row shape of a group line, used by layout() to budget the label field so
@@ -238,18 +261,9 @@ const (
 var groupRowPad int
 
 func groupDelegate(hue lipgloss.Color, focused bool) list.ItemDelegate {
-	d := list.NewDefaultDelegate()
-	d.SetHeight(1)
-	d.ShowDescription = false
-	d.SetSpacing(0)
+	d := baseDelegate(hue, focused)
 	s := d.Styles
 	groupRowPad = s.NormalTitle.GetPaddingLeft() + s.NormalTitle.GetPaddingRight()
-	s.SelectedTitle = selectStyle(hue, focused)
-	s.SelectedDesc = selectStyle(hue, focused)
-	s.DimmedTitle = s.DimmedTitle.Foreground(colDim)
-	s.DimmedDesc = s.DimmedDesc.Foreground(colDim)
-	s.FilterMatch = s.FilterMatch.Foreground(colSignal).Bold(true)
-	d.Styles = s
 	return d
 }
 
@@ -260,7 +274,7 @@ func groupDelegate(hue lipgloss.Color, focused bool) list.ItemDelegate {
 // pass without churning delegates each frame.
 func (m *App) applyChrome() {
 	hue := m.signal()
-	groupsFocused := m.focus == "groups"
+	groupsFocused := m.focus == focusGroups
 	if m.chromeHue == string(hue) && m.chromeFocus == m.focus {
 		return
 	}
@@ -287,7 +301,7 @@ func (m *App) Init() tea.Cmd {
 	player.Debugf("color profile: %s", lipgloss.ColorProfile().Name())
 	// Ask for mpv up front when none is runnable. Init runs only under the
 	// real runtime (tests drive Update directly), so this never hijacks tests.
-	if !player.Available(m.cfg.Cfg.Settings.MpvPath) {
+	if !player.Available(m.cfg.MpvPath()) {
 		m.openMpvSetup()
 	}
 	return tea.Batch(m.spinner.Tick, tea.WindowSize())
@@ -301,19 +315,21 @@ func (m *App) activeLoaded() *store.Loaded {
 }
 
 func (m *App) startAllLoads() {
-	for i := range m.cfg.Cfg.Sources {
+	for i := range m.cfg.Sources() {
 		m.startSourceLoad(i)
 	}
-	if len(m.cfg.Cfg.Sources) == 0 {
-		m.status = "no sources yet " + glDash + " press a to add one"
+	if len(m.cfg.Sources()) == 0 {
+		m.status = "no sources yet " + glyphDash + " press a to add one"
 	}
 }
 
 func (m *App) startSourceLoad(idx int) {
-	if idx < 0 || idx >= len(m.cfg.Cfg.Sources) {
+	src, ok := m.cfg.SourceAt(idx)
+	if !ok {
 		return
 	}
-	src := m.cfg.Cfg.Sources[idx] // value snapshot on the UI goroutine
+	// src is a value snapshot: the background fetch below never aliases the
+	// live config slice.
 	m.setBusy(true, "loading "+src.Name)
 	go func() {
 		var ld *store.Loaded
@@ -337,8 +353,8 @@ func (m *App) effectiveSourceUA(src store.Source) string {
 	if src.UserAgent != "" {
 		return src.UserAgent
 	}
-	if m.cfg.Cfg.Settings.DefaultUserAgent != "" {
-		return m.cfg.Cfg.Settings.DefaultUserAgent
+	if ua := m.cfg.DefaultUserAgent(); ua != "" {
+		return ua
 	}
 	return "iptv-tui/1.0"
 }
@@ -382,7 +398,7 @@ func (m *App) rebuildGroupEntries() {
 	if m.inSeries {
 		// Inside a series the groups pane becomes the season rail: All plus
 		// one entry per season in watch order.
-		entries = append(entries, groupEntry{label: "All", count: len(m.episodeChans), kind: "all"})
+		entries = append(entries, groupEntry{label: "All", count: len(m.episodeChans), kind: groupKindAll})
 		seen := map[string]bool{}
 		for _, c := range m.episodeChans {
 			g := seasonLabel(c)
@@ -396,15 +412,15 @@ func (m *App) rebuildGroupEntries() {
 					n++
 				}
 			}
-			entries = append(entries, groupEntry{label: g, count: n, kind: "season"})
+			entries = append(entries, groupEntry{label: g, count: n, kind: groupKindSeason})
 		}
 	} else {
 		channels := ld.Channels[m.mediaType]
 		allCount := len(channels)
 		if allCount == 0 {
-			entries = append(entries, groupEntry{label: "All", count: 0, kind: "all"})
+			entries = append(entries, groupEntry{label: "All", count: 0, kind: groupKindAll})
 		} else {
-			entries = append(entries, groupEntry{label: "All", count: allCount, kind: "all"})
+			entries = append(entries, groupEntry{label: "All", count: allCount, kind: groupKindAll})
 		}
 		favCount := 0
 		for _, c := range channels {
@@ -412,7 +428,7 @@ func (m *App) rebuildGroupEntries() {
 				favCount++
 			}
 		}
-		entries = append(entries, groupEntry{label: "Favorites", count: favCount, kind: "fav"})
+		entries = append(entries, groupEntry{label: "Favorites", count: favCount, kind: groupKindFav})
 		for _, g := range ld.Groups[m.mediaType] {
 			n := 0
 			for _, c := range channels {
@@ -420,7 +436,7 @@ func (m *App) rebuildGroupEntries() {
 					n++
 				}
 			}
-			entries = append(entries, groupEntry{label: g, count: n, kind: "group"})
+			entries = append(entries, groupEntry{label: g, count: n, kind: groupKindGroup})
 		}
 	}
 	m.groupEntries = entries
@@ -429,7 +445,7 @@ func (m *App) rebuildGroupEntries() {
 	}
 	items := make([]list.Item, 0, len(entries))
 	for _, e := range entries {
-		items = append(items, groupItem{label: e.label, count: e.count, fav: e.kind == "fav", labelW: m.grpLabelW})
+		items = append(items, groupItem{label: e.label, count: e.count, fav: e.kind == groupKindFav, labelW: m.grpLabelW})
 	}
 	prev := m.grpList.Index()
 	if prev >= len(items) {
@@ -479,7 +495,7 @@ func (m *App) currentChannels() []store.Channel {
 			out = filterByName(out, m.searchFilter)
 		}
 		if m.groupIdx >= 0 && m.groupIdx < len(m.groupEntries) {
-			if e := m.groupEntries[m.groupIdx]; e.kind == "season" {
+			if e := m.groupEntries[m.groupIdx]; e.kind == groupKindSeason {
 				var f []store.Channel
 				for _, c := range out {
 					if seasonLabel(c) == e.label {
@@ -500,9 +516,9 @@ func (m *App) currentChannels() []store.Channel {
 	}
 	e := m.groupEntries[m.groupIdx]
 	switch e.kind {
-	case "all":
+	case groupKindAll:
 		return wall
-	case "fav":
+	case groupKindFav:
 		var out []store.Channel
 		for _, c := range wall {
 			if m.cfg.IsFavorite(c.Key) {
@@ -532,172 +548,6 @@ func filterByName(ch []store.Channel, q string) []store.Channel {
 	return out
 }
 
-// ---------- playback ----------
-
-func (m *App) resumePosition(ch store.Channel) time.Duration {
-	if !ch.IsPositionTrackable() {
-		return 0
-	}
-	h, ok := m.cfg.GetHistory(ch.Key)
-	if !ok {
-		return 0
-	}
-	if h.Position <= 30*time.Second {
-		return 0
-	}
-	if h.Duration > 0 && h.Position > h.Duration-30*time.Second {
-		return 0
-	}
-	return h.Position
-}
-
-func (m *App) effectiveUA(ch store.Channel) string {
-	if ch.UserAgent != "" {
-		return ch.UserAgent
-	}
-	src := m.cfg.FindSource(ch.SourceID)
-	if src != nil && src.UserAgent != "" {
-		return src.UserAgent
-	}
-	return m.cfg.Cfg.Settings.DefaultUserAgent
-}
-
-func (m *App) effectiveReferer(ch store.Channel) string {
-	if ch.Referer != "" {
-		return ch.Referer
-	}
-	src := m.cfg.FindSource(ch.SourceID)
-	if src != nil {
-		return src.Referer
-	}
-	return ""
-}
-
-func (m *App) launchChannel(ch store.Channel) {
-	if !player.Available(m.cfg.Cfg.Settings.MpvPath) {
-		m.openMpvSetup()
-		return
-	}
-	if m.playing != nil {
-		m.stopMpv()
-	}
-	start := m.resumePosition(ch)
-	customArgs := player.SplitArgs(m.cfg.Cfg.Settings.MpvArgs)
-	req := player.Request{
-		URL:           ch.URL,
-		Title:         ch.Name,
-		UserAgent:     m.effectiveUA(ch),
-		Referer:       m.effectiveReferer(ch),
-		Start:         start,
-		CustomArgs:    customArgs,
-		MpvPath:       m.cfg.Cfg.Settings.MpvPath,
-		TrackPosition: ch.IsPositionTrackable(),
-	}
-	m.busy = true
-	m.busyMsg = "launching mpv" + glEllipsis
-	m.status = ""
-	go func() {
-		proc, err := player.Launch(req)
-		m.send(playerMsg{ch: ch, proc: proc, err: err})
-	}()
-}
-
-func (m *App) stopMpv() {
-	if m.playing != nil {
-		m.playing.Stop()
-	}
-}
-
-func (m *App) openSeries(ch store.Channel) {
-	ld := m.activeLoaded()
-	if ld == nil {
-		return
-	}
-	src := m.cfg.FindSource(ch.SourceID)
-	if src == nil || !src.Kind.IsXtream() {
-		return
-	}
-	m.seriesTitle = ch.Name
-	m.busy = true
-	m.busyMsg = "loading episodes" + glEllipsis
-	m.setStatus("", false)
-	go func() {
-		eps := load.ExpandSeries(ld, src, ch.SeriesID, &m.seriesCache)
-		m.send(seriesLoadedMsg{channels: eps})
-	}()
-}
-
-// seasonLabel names the groups-pane row an episode belongs to. Episodes from
-// mapEpisodes always carry "Season N"; anything else falls into Episodes so
-// the rail never shows a blank row.
-func seasonLabel(c store.Channel) string {
-	if c.Group != "" {
-		return c.Group
-	}
-	return "Episodes"
-}
-
-// cycleTheme steps the palette ring, repaints cached chrome, and remembers
-// the choice in settings so the next boot opens on it.
-func (m *App) cycleTheme(delta int) {
-	CycleTheme(delta)
-	m.chromeHue = "" // force applyChrome to repaint for the new signal
-	m.spinner.Style = lipgloss.NewStyle().Foreground(colSignal)
-	m.cfg.Cfg.Settings.Theme = CurrentThemeName()
-	m.cfg.Save()
-	m.setStatus("theme: "+CurrentThemeName(), false)
-}
-
-// ---------- EPG ----------
-
-func (m *App) openEpg(ch store.Channel) {
-	m.epg = &epgView{title: ch.Name}
-	m.mode = modeEpg
-	src := m.cfg.FindSource(ch.SourceID)
-	ld := m.activeLoaded()
-	if src == nil || ld == nil {
-		m.epg.err = "source not loaded"
-		return
-	}
-	if src.Kind.IsXtream() && ch.StreamID > 0 {
-		// Serve the cached listing instantly (fresh or stale), then refresh
-		// in the background; the panel only spins when there is nothing yet.
-		cached, cErr := epg.LoadShortEpg(src.ID, ch.StreamID, 6*time.Hour)
-		switch cErr {
-		case epg.ErrNoCache:
-			m.epg.loading = true
-		default: // fresh or stale — show immediately
-			m.epg.progs = cached
-		}
-		go func() {
-			fresh, err := load.EpgForStream(src, ch.StreamID)
-			epg.SaveShortEpg(src.ID, ch.StreamID, fresh, time.Now())
-			m.send(epgBgLoadedMsg{title: ch.Name, progs: fresh, err: err})
-		}()
-		return
-	}
-	// M3U: use the in-memory XMLTV index (served from disk cache on load).
-	tvgID := ch.TvgID
-	if tvgID == "" {
-		tvgID = ch.TvgName
-	}
-	progs := ld.EPG.Get(tvgID)
-	if len(progs) == 0 && tvgID != ch.TvgName {
-		progs = ld.EPG.Get(ch.TvgName)
-	}
-	m.epg.progs = trimPrograms(progs, 30)
-	if len(progs) == 0 {
-		m.epg.err = "no EPG data for this channel"
-	}
-}
-
-func trimPrograms(progs []store.Program, n int) []store.Program {
-	if len(progs) <= n {
-		return progs
-	}
-	return progs[:n]
-}
-
 // ---------- status ----------
 
 func (m *App) setStatus(s string, isErr bool) {
@@ -708,16 +558,4 @@ func (m *App) setStatus(s string, isErr bool) {
 func (m *App) setBusy(b bool, msg string) {
 	m.busy = b
 	m.busyMsg = msg
-}
-
-// ---------- save ----------
-
-func (m *App) flushAndSave() {
-	if m.playing != nil {
-		pos, dur := m.playing.Position()
-		if pos > 0 {
-			m.cfg.RecordPosition(m.playingCh.Key, pos, dur)
-		}
-	}
-	m.cfg.Save()
 }

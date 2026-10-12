@@ -270,9 +270,8 @@ func buildArgs(r Request, socket string, kind PlayerKind) []string {
 // buildVLCArgs covers what VLC accepts: quit after playback, a user agent,
 // a display title, and a start offset. Referer/headers have no VLC
 // equivalent and are dropped. Unknown flags would only warn, never fail.
-// Note: the TUI only records position over mpv IPC (see Launch), so Start
-// is best-eff effort from API callers — normal TUI plays via VLC always
-// start at 0, matching the README's "no resume without mpv".
+// Note: the TUI zeroes Start for non-mpv backends (see launchChannel), so a
+// start offset here only ever comes from direct API callers.
 func buildVLCArgs(r Request, args []string) []string {
 	args = append(args, "--play-and-exit")
 	if r.UserAgent != "" {

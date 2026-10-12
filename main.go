@@ -53,7 +53,7 @@ func main() {
 	tui.SetASCII(*ascii || os.Getenv("IPTV_TUI_ASCII") == "1")
 
 	// Paint the saved palette before anything derives a style from it.
-	tui.ApplyStoredTheme(cfg.Cfg.Settings.Theme)
+	tui.ApplyStoredTheme(cfg.Theme())
 	// Tint the whole window; restored below so nothing leaks into the shell.
 	tui.SetTermBackground()
 	defer tui.ResetTermBackground()
@@ -68,7 +68,7 @@ func main() {
 }
 
 func runDirect(cfg *store.Store, target string) int {
-	if _, _, ok := player.Detect(cfg.Cfg.Settings.MpvPath); !ok {
+	if _, _, ok := player.Detect(cfg.MpvPath()); !ok {
 		fmt.Fprintln(os.Stderr, "no player found (looked for mpv, vlc, mpc-hc)")
 		for _, l := range player.InstallHelp() {
 			fmt.Fprintln(os.Stderr, "  "+l)
@@ -78,9 +78,9 @@ func runDirect(cfg *store.Store, target string) int {
 	req := player.Request{
 		URL:           target,
 		Title:         target,
-		MpvPath:       cfg.Cfg.Settings.MpvPath,
-		UserAgent:     cfg.Cfg.Settings.DefaultUserAgent,
-		CustomArgs:    player.SplitArgs(cfg.Cfg.Settings.MpvArgs),
+		MpvPath:       cfg.MpvPath(),
+		UserAgent:     cfg.DefaultUserAgent(),
+		CustomArgs:    player.SplitArgs(cfg.MpvArgs()),
 		TrackPosition: true,
 	}
 	proc, err := player.Launch(req)

@@ -124,12 +124,17 @@ serving them.
 
 How it travels: except DASH (`.mpd`), the stream is proxied through this
 machine, so provider headers (User-Agent, Referer) are injected server-side
-and throughput is measured, not guessed. HLS playlists are rewritten so
+and throughput is measured, not guessed. The player API additionally accepts
+an `Origin` and extra headers for providers that need more than UA/Referer
+(`player.Request.Origin`/`ExtraHeaders`, sent as mpv `--http-header-fields`);
+the TUI itself only fills User-Agent/Referer today. HLS playlists are rewritten so
 segments stay behind the proxy. DASH casts direct: the TV pulls the origin
 itself with no headers and no bitrate. On first use the OS asks to allow the
 local listener through the firewall. The sheet shows the advertised address
 and the TV's pull count, so a TV that never connects (IDLE, zero pulls)
-points at firewall or routing instead of the stream.
+points at firewall or routing instead of the stream. Casting onto a TV that
+is already running a session restarts it first, and receiver polls are
+serialized so overlapping cast/stop operations never interleave on the wire.
 
 While casting, the sheet shows a buffer dashboard from receiver status polls
 every 2s: state (`PLAYING`/`BUFFERING`/…), position, rate, and poll time in
@@ -184,8 +189,10 @@ Source lists and EPG indexes are cached to disk, so startup works offline and is
 - `internal/player`: `mpv` launch, IPC position tracking
 - `internal/cast`: Chromecast send-to-TV (LAN scan, Castv2 sender, LAN proxy
   with HLS rewrite, receiver status polling, no cgo)
-- `internal/store`: config, favorites, history
-- `internal/tui`: Bubble Tea UI
+- `internal/store`: config, favorites, history (mutex-guarded; snapshots for background use)
+- `internal/tui`: Bubble Tea UI (`tui` shell/chrome, `modes` dispatch table,
+  `update` main keys, `view` paint, `playback`, `series`, `epgview`,
+  `sources`, `cast`, `overlays`, `theme`)
 - `build-release.ps1`: release packaging
 
 ## Development
@@ -196,7 +203,7 @@ go test ./...
 gofmt -l .
 ```
 
-Debug logging: `IPTV_TUI_DEBUG=1 iptv-tui` (also `true`/`yes`/`on`; `0`/`false`/`off`/empty stay off) clears
+Debug logging: `IPTV_TUI_DEBUG=1 iptv-tui` (also `true`/`yes`/`on`; anything else stays off) clears
 `<configDir>/iptv-tui/player-debug.log` on boot, prints its path, and records
 the cast path end to end (scan results, dial/launch/LOAD outcomes, receiver
 states, proxy pulls and byte counts, stop confirmation). Stream URLs embed

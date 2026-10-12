@@ -33,7 +33,7 @@ func newAddForm(kind store.SourceKind, width int) *addForm {
 		f.labels = []string{"Name", "URL or file path", "User-Agent (optional)"}
 		f.fields = []textinput.Model{
 			newField("My M3U playlist", width, true),
-			newField("https://"+glEllipsis+"/playlist.m3u or C:\\path\\list.m3u", width, false),
+			newField("https://"+glyphEllipsis+"/playlist.m3u or C:\\path\\list.m3u", width, false),
 			newField("custom UA", width, false),
 		}
 	default:
@@ -162,7 +162,7 @@ func (f *addForm) View(width, height int) string {
 	for i, fl := range f.fields {
 		marker := "  "
 		if i == f.active {
-			marker = sig(colSignal, glCursor) + " "
+			marker = sig(colSignal, glyphCursor) + " "
 		}
 		if stacked {
 			fmt.Fprintf(&b, "  %s%s\n  %s", marker, f.labels[i], fl.View())
@@ -206,7 +206,7 @@ type epgView struct {
 func (e *epgView) View(width, height int) string {
 	var b strings.Builder
 	if e.loading {
-		b.WriteString("loading EPG" + glEllipsis)
+		b.WriteString("loading EPG" + glyphEllipsis)
 	} else if e.err != "" {
 		b.WriteString("EPG unavailable: " + e.err)
 	} else if len(e.progs) == 0 {
@@ -221,7 +221,7 @@ func (e *epgView) View(width, height int) string {
 				p.Start.Hour(), p.Start.Minute(), p.Stop.Hour(), p.Stop.Minute(), ellipsize(p.Title, 40))
 			line := "  " + title
 			if p.Start.Before(now) && p.Stop.After(now) {
-				line = sig(colLive, glPlay) + " " + title
+				line = sig(colLive, glyphPlaying) + " " + title
 			}
 			b.WriteString(line + "\n")
 			if p.Desc != "" {
@@ -231,15 +231,15 @@ func (e *epgView) View(width, height int) string {
 		}
 	}
 	inner := b.String()
-	return panelBox(width, lipgloss.Height(inner)+2, panelStyle.Bold(true).Render("EPG "+glSep+" "+ellipsize(e.title, 30))+"\n\n"+inner+"  "+dim("esc=back  "+glUpDown+"=scroll"))
+	return panelBox(width, lipgloss.Height(inner)+2, panelStyle.Bold(true).Render("EPG "+glyphSeparator+" "+ellipsize(e.title, 30))+"\n\n"+inner+"  "+dim("esc=back  "+glyphArrowUpDown+"=scroll"))
 }
 
 // ---------- Help ----------
 
 func helpView(width, height int) string {
 	rows := []struct{ k, what string }{
-		{glUpDown + "/pgup/pgdn", "navigate list"},
-		{"tab / " + glLeft + " " + glRight, "switch group " + glAngleOpen + glAngleClose + " channel panes"},
+		{glyphArrowUpDown + "/pgup/pgdn", "navigate list"},
+		{"tab / " + glyphArrowLeft + " " + glyphArrowRight, "switch group " + glyphAngleOpen + glyphAngleClose + " channel panes"},
 		{"enter", "play channel / expand series"},
 		{"o", "play channel"},
 		{"c", "send channel to Google TV (Chromecast)"},
@@ -257,7 +257,7 @@ func helpView(width, height int) string {
 		{"m", "toggle mpv keep-on-quit"},
 		{"?", "this help"},
 		{"q / esc", "quit"},
-		{glLeft + " " + glRight, "switch theme"},
+		{glyphArrowLeft + " " + glyphArrowRight, "switch theme"},
 	}
 	// A short terminal cannot hold the whole sheet. Show what fits, in the order
 	// it matters, and count the rest in the footer: cutting bindings off in
@@ -275,9 +275,9 @@ func helpView(width, height int) string {
 	for _, r := range shown {
 		fmt.Fprintf(&b, "  %-*s %s\n", keyW, sigBold(colSignal, r.k), ellipsize(r.what, room))
 	}
-	keys := "esc=back  " + glSep + "  " + glLeft + " " + glRight + " theme: " + CurrentThemeName()
+	keys := "esc=back  " + glyphSeparator + "  " + glyphArrowLeft + " " + glyphArrowRight + " theme: " + CurrentThemeName()
 	if hidden > 0 {
-		keys += fmt.Sprintf("  %s  %d more below, resize to read", glSep, hidden)
+		keys += fmt.Sprintf("  %s  %d more below, resize to read", glyphSeparator, hidden)
 	}
 	return panelBox(width, lipgloss.Height(b.String())+2, b.String()+"  "+dim(keys))
 }

@@ -249,26 +249,26 @@ func (m *App) signal() lipgloss.Color { return signalFor(m.activeIdx) }
 //
 // Nothing here is styling. These are the only places a character is chosen.
 var (
-	glMark       = "▚" // nameplate flag
-	glPlay       = "▶" // on-air, playing
-	glStar       = "★" // favorite
-	glCursor     = "▸" // form field cursor, channel readout
-	glSlot       = "○" // unused EPG slot
-	glRuleH      = "─" // hairline
-	glRuleV      = "│" // pane divider
-	glMeterOn    = "━" // progress meter, played
-	glMeterOff   = "─" // progress meter, remaining
-	glSep        = "·" // hairline dot between hints
-	glEllipsis   = "…" // truncation mark
-	glDash       = "—" // em dash in status copy
-	glUp         = "↑"
-	glDown       = "↓"
-	glUpDown     = glUp + glDown
-	glLeft       = "◄"
-	glRight      = "►"
-	glAngleOpen  = "⟨"
-	glAngleClose = "⟩"
-	glBars       = "▁▂▃▄▅▆▇█" // sparkline levels, ascending
+	glyphFlag           = "▚" // nameplate flag
+	glyphPlaying        = "▶" // on-air, playing
+	glyphFavorite       = "★" // favorite
+	glyphCursor         = "▸" // form field cursor, channel readout
+	glyphEmptySlot      = "○" // unused EPG slot
+	glyphHorizontalRule = "─" // hairline
+	glyphVerticalRule   = "│" // pane divider
+	glyphMeterFilled    = "━" // progress meter, played
+	glyphMeterEmpty     = "─" // progress meter, remaining
+	glyphSeparator      = "·" // hairline dot between hints
+	glyphEllipsis       = "…" // truncation mark
+	glyphDash           = "—" // em dash in status copy
+	glyphArrowUp        = "↑"
+	glyphArrowDown      = "↓"
+	glyphArrowUpDown    = glyphArrowUp + glyphArrowDown
+	glyphArrowLeft      = "◄"
+	glyphArrowRight     = "►"
+	glyphAngleOpen      = "⟨"
+	glyphAngleClose     = "⟩"
+	glyphSparkLevels    = "▁▂▃▄▅▆▇█" // sparkline levels, ascending
 )
 
 // SetASCII puts the console in plain ASCII. Called once at startup, before any
@@ -276,23 +276,23 @@ var (
 func SetASCII(on bool) {
 	asciiMode = on
 	if on {
-		glMark, glPlay, glStar, glCursor, glSlot = "=", ">", "*", ">", "-"
-		glRuleH, glRuleV, glMeterOn, glMeterOff, glSep = "-", "|", "#", "-", "-"
-		glEllipsis, glDash = "...", "--"
-		glUp, glDown = "^", "v"
-		glUpDown = glUp + glDown
-		glLeft, glRight = "<", ">"
-		glAngleOpen, glAngleClose = "<", ">"
-		glBars = ".:-=+*#@"
+		glyphFlag, glyphPlaying, glyphFavorite, glyphCursor, glyphEmptySlot = "=", ">", "*", ">", "-"
+		glyphHorizontalRule, glyphVerticalRule, glyphMeterFilled, glyphMeterEmpty, glyphSeparator = "-", "|", "#", "-", "-"
+		glyphEllipsis, glyphDash = "...", "--"
+		glyphArrowUp, glyphArrowDown = "^", "v"
+		glyphArrowUpDown = glyphArrowUp + glyphArrowDown
+		glyphArrowLeft, glyphArrowRight = "<", ">"
+		glyphAngleOpen, glyphAngleClose = "<", ">"
+		glyphSparkLevels = ".:-=+*#@"
 		return
 	}
-	glMark, glPlay, glStar, glCursor, glSlot = "▚", "▶", "★", "▸", "○"
-	glRuleH, glRuleV, glMeterOn, glMeterOff, glSep = "─", "│", "━", "─", "·"
-	glEllipsis, glDash = "…", "—"
-	glUp, glDown = "↑", "↓"
-	glUpDown = glUp + glDown
-	glLeft, glRight = "◄", "►"
-	glAngleOpen, glAngleClose = "⟨", "⟩"
+	glyphFlag, glyphPlaying, glyphFavorite, glyphCursor, glyphEmptySlot = "▚", "▶", "★", "▸", "○"
+	glyphHorizontalRule, glyphVerticalRule, glyphMeterFilled, glyphMeterEmpty, glyphSeparator = "─", "│", "━", "─", "·"
+	glyphEllipsis, glyphDash = "…", "—"
+	glyphArrowUp, glyphArrowDown = "↑", "↓"
+	glyphArrowUpDown = glyphArrowUp + glyphArrowDown
+	glyphArrowLeft, glyphArrowRight = "◄", "►"
+	glyphAngleOpen, glyphAngleClose = "⟨", "⟩"
 }
 
 // spinnerASCII replaces bubbles' default Dot spinner. Dot is braille, which is
@@ -335,6 +335,17 @@ func panelBox(width, height int, content string) string {
 		Height(height-2).
 		Padding(1, 1).
 		Render(content)
+}
+
+// cycleTheme steps the palette ring, repaints cached chrome, and remembers
+// the choice in settings so the next boot opens on it.
+func (m *App) cycleTheme(delta int) {
+	CycleTheme(delta)
+	m.chromeHue = "" // force applyChrome to repaint for the new signal
+	m.spinner.Style = lipgloss.NewStyle().Foreground(colSignal)
+	m.cfg.SetTheme(CurrentThemeName())
+	m.cfg.Save()
+	m.setStatus("theme: "+CurrentThemeName(), false)
 }
 
 // sig renders s in the given signal hue.

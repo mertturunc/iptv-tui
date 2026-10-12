@@ -101,7 +101,7 @@ func TestColumnSplitIsOneThirdTwoThirds(t *testing.T) {
 		body := a.renderMain()
 		sep := -1
 		for _, line := range strings.Split(body, "\n") {
-			if i := strings.Index(line, glRuleV); i >= 0 {
+			if i := strings.Index(line, glyphVerticalRule); i >= 0 {
 				sep = lipgloss.Width(line[:i])
 				break
 			}
@@ -275,7 +275,7 @@ func TestPlaybarReadouts(t *testing.T) {
 	if !strings.Contains(live, "Some Movie") {
 		t.Errorf("live strip = %q, want the channel name", live)
 	}
-	for _, unwanted := range []string{glMeterOn, "1:30", "/"} {
+	for _, unwanted := range []string{glyphMeterFilled, "1:30", "/"} {
 		if strings.Contains(live, unwanted) {
 			t.Errorf("live strip = %q, want no %q without a duration", live, unwanted)
 		}
@@ -284,7 +284,7 @@ func TestPlaybarReadouts(t *testing.T) {
 	// VOD: meter plus tabular position, duration and remaining.
 	a.playPos, a.playDur = 12*time.Minute+4*time.Second, 58*time.Minute
 	vod := ansiRE.ReplaceAllString(a.renderPlaybar(), "")
-	for _, want := range []string{"12:04", "58:00", "-45:56", glMeterOn} {
+	for _, want := range []string{"12:04", "58:00", "-45:56", glyphMeterFilled} {
 		if !strings.Contains(vod, want) {
 			t.Errorf("VOD strip = %q, want it to contain %q", vod, want)
 		}
@@ -293,17 +293,17 @@ func TestPlaybarReadouts(t *testing.T) {
 	if got := lipgloss.Width(strings.TrimRight(vod, " ")); got != a.width {
 		t.Errorf("VOD readout ends at column %d, want the console edge %d", got, a.width)
 	}
-	if strings.Contains(vod, strings.Repeat(glMeterOn, meterMaxCells+1)) {
+	if strings.Contains(vod, strings.Repeat(glyphMeterFilled, meterMaxCells+1)) {
 		t.Errorf("VOD strip meter exceeds the %d-cell cap", meterMaxCells)
 	}
 
 	// The meter tracks the position: empty at the start, full at the end.
 	a.playPos = 0
-	if got := ansiRE.ReplaceAllString(a.renderPlaybar(), ""); strings.Contains(got, glMeterOn) {
+	if got := ansiRE.ReplaceAllString(a.renderPlaybar(), ""); strings.Contains(got, glyphMeterFilled) {
 		t.Errorf("strip at position zero = %q, want an empty meter", got)
 	}
 	a.playPos = a.playDur
-	if got := ansiRE.ReplaceAllString(a.renderPlaybar(), ""); strings.Contains(got, glMeterOff) {
+	if got := ansiRE.ReplaceAllString(a.renderPlaybar(), ""); strings.Contains(got, glyphMeterEmpty) {
 		t.Errorf("strip at full position = %q, want a full meter", got)
 	}
 
@@ -343,7 +343,7 @@ func TestGroupPaneFillsItsColumn(t *testing.T) {
 	body := a.renderMain()
 
 	for _, line := range strings.Split(body, "\n") {
-		i := strings.Index(line, glRuleV)
+		i := strings.Index(line, glyphVerticalRule)
 		if i < 0 {
 			continue
 		}
@@ -458,13 +458,13 @@ func TestASCIIDropsEveryGlyph(t *testing.T) {
 		name string
 		got  string
 	}{
-		{"glMark", glMark}, {"glPlay", glPlay}, {"glStar", glStar},
-		{"glCursor", glCursor}, {"glSlot", glSlot}, {"glRuleH", glRuleH},
-		{"glRuleV", glRuleV}, {"glMeterOn", glMeterOn}, {"glMeterOff", glMeterOff},
-		{"glSep", glSep}, {"glEllipsis", glEllipsis}, {"glDash", glDash},
-		{"glUpDown", glUpDown}, {"glLeft", glLeft}, {"glRight", glRight},
-		{"glAngleOpen", glAngleOpen}, {"glAngleClose", glAngleClose},
-		{"glBars", glBars},
+		{"glyphFlag", glyphFlag}, {"glyphPlaying", glyphPlaying}, {"glyphFavorite", glyphFavorite},
+		{"glyphCursor", glyphCursor}, {"glyphEmptySlot", glyphEmptySlot}, {"glyphHorizontalRule", glyphHorizontalRule},
+		{"glyphVerticalRule", glyphVerticalRule}, {"glyphMeterFilled", glyphMeterFilled}, {"glyphMeterEmpty", glyphMeterEmpty},
+		{"glyphSeparator", glyphSeparator}, {"glyphEllipsis", glyphEllipsis}, {"glyphDash", glyphDash},
+		{"glyphArrowUpDown", glyphArrowUpDown}, {"glyphArrowLeft", glyphArrowLeft}, {"glyphArrowRight", glyphArrowRight},
+		{"glyphAngleOpen", glyphAngleOpen}, {"glyphAngleClose", glyphAngleClose},
+		{"glyphSparkLevels", glyphSparkLevels},
 	}
 
 	for _, tk := range tokens {

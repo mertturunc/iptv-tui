@@ -24,16 +24,16 @@ var (
 	path string
 )
 
-// Enabled reports whether debug logging is on. The documented form is
-// IPTV_TUI_DEBUG=1; "true"/"yes"/"on" are accepted as well, while empty,
-// "0", "false", "no", and "off" stay off.
+// Enabled reports whether debug logging is on. Only the documented values
+// enable it: "1", "true", "yes", or "on" (case-insensitive, surrounding
+// whitespace ignored). Everything else — empty, "0", "false", "off", or any
+// other string — stays off, so a typo never floods the disk with logs.
 func Enabled() bool {
-	v := strings.ToLower(strings.TrimSpace(os.Getenv("IPTV_TUI_DEBUG")))
-	switch v {
-	case "", "0", "false", "no", "off":
-		return false
-	default:
+	switch v := strings.ToLower(strings.TrimSpace(os.Getenv("IPTV_TUI_DEBUG"))); v {
+	case "1", "true", "yes", "on":
 		return true
+	default:
+		return false
 	}
 }
 

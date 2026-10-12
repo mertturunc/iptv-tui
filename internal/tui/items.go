@@ -20,7 +20,7 @@ type groupItem struct {
 func (g groupItem) Title() string {
 	prefix := " "
 	if g.fav {
-		prefix = glStar
+		prefix = glyphFavorite
 	}
 	w := g.labelW
 	if w <= 0 {
@@ -52,7 +52,7 @@ func (i channelItem) Title() string {
 	}
 	prefix := " "
 	if i.fav {
-		prefix = glStar
+		prefix = glyphFavorite
 	}
 	return numStr + prefix + name
 }
@@ -65,7 +65,7 @@ func (i channelItem) Description() string {
 	if i.now != "" {
 		parts = append(parts, i.now)
 	}
-	return strings.Join(parts, " "+glSep+" ")
+	return strings.Join(parts, " "+glyphSeparator+" ")
 }
 
 func (i channelItem) FilterValue() string { return i.ch.Name }
@@ -105,11 +105,7 @@ func (s sourceListItem) Title() string {
 
 func (s sourceListItem) Description() string {
 	if s.src.Kind.IsM3U() {
-		u := s.src.URL
-		if len(u) > 40 {
-			u = u[:37] + "..."
-		}
-		return u
+		return truncate(s.src.URL, 37)
 	}
 	return s.src.Server
 }
@@ -123,12 +119,12 @@ type epgProgramItem struct {
 
 func (e epgProgramItem) Title() string {
 	if e.now {
-		return fmt.Sprintf(glPlay+" %02d:%02d-%02d:%02d  %s", e.prog.Start.Hour(), e.prog.Start.Minute(),
+		return fmt.Sprintf(glyphPlaying+" %02d:%02d-%02d:%02d  %s", e.prog.Start.Hour(), e.prog.Start.Minute(),
 			e.prog.Stop.Hour(), e.prog.Stop.Minute(), e.prog.Title)
 	}
 	prefix := "  "
 	if e.future {
-		prefix = glSlot
+		prefix = glyphEmptySlot
 	}
 	return fmt.Sprintf("%s %02d:%02d-%02d:%02d  %s", prefix, e.prog.Start.Hour(), e.prog.Start.Minute(),
 		e.prog.Stop.Hour(), e.prog.Stop.Minute(), e.prog.Title)
@@ -138,13 +134,19 @@ func (e epgProgramItem) Description() string {
 	if e.prog.Desc == "" {
 		return ""
 	}
-	d := e.prog.Desc
-	if len(d) > 80 {
-		d = d[:77] + "..."
-	}
-	return "  " + d
+	return "  " + truncate(strings.ReplaceAll(e.prog.Desc, "\n", " "), 77)
 }
 func (e epgProgramItem) FilterValue() string { return e.prog.Title }
+
+// truncate shortens s to keep bytes plus "..." when it overruns keep+3,
+// so short overruns pass through untouched instead of being pointlessly
+// shortened by exactly the width of the mark itself.
+func truncate(s string, keep int) string {
+	if len(s) > keep+3 {
+		return s[:keep] + "..."
+	}
+	return s
+}
 
 // ellipsize truncates s to maxRunes UTF-8 runes, appending the truncation mark
 // if needed. The mark is a token, so ASCII mode spends three columns where
@@ -155,9 +157,9 @@ func ellipsize(s string, maxRunes int) string {
 	if len(runes) <= maxRunes {
 		return s
 	}
-	mark := []rune(glEllipsis)
+	mark := []rune(glyphEllipsis)
 	if len(mark) >= maxRunes {
 		return string(mark[:maxRunes])
 	}
-	return string(runes[:maxRunes-len(mark)]) + glEllipsis
+	return string(runes[:maxRunes-len(mark)]) + glyphEllipsis
 }
