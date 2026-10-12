@@ -1,0 +1,27 @@
+# Release staging output. Rebuilt by ./build-release.ps1; the archives and
+# SHA256SUMS are uploaded to a GitHub release, never committed.
+/dist/
+
+# Local builds left in the working tree.
+*.exe
+*.exe~
+
+# Design tool scratch, not part of the build.
+.impeccable/
+.agents/
+# Local tool state.
+skills-lock.json
+# Unrelated local data, not part of the project.
+hp_metadata/
+# Editor, OS, and tool leftovers. A .bak in the source tree is a botched edit
+# waiting to be mistaken for the real file.
+/*.bak
+*.orig
+*.rej
+*.tmp
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
