@@ -11,6 +11,7 @@ package airplay
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -70,27 +71,47 @@ func splitAddr(addr, defPort string) (host, port string) {
 // plain HTTP (no TLS, no persistent connection), so the client is just the
 // TV's address plus a shared HTTP client.
 type Client struct {
-	host   string
-	port   string
-	http   *http.Client
-	device string
+	host    string
+	port    string
+	http    *http.Client
+	device  string
+	session string
 }
 
-// Dial verifies the TV answers on the AirPlay port and returns a client for
-// it. addr is a bare host; host:port is honored when given.
+// userAgent mimics a first-party client (captured from a real one): picky
+// receivers refuse requests that do not look like Apple software.
+const userAgent = "AirPlay/425.1"
+
+// newSessionID mints the per-client session ID first-party clients send on
+// every request.
+func newSessionID() string {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+}
+
+// Dial returns a client for the TV at addr (bare host; host:port is honored
+// when given). The /server-info handshake only learns the friendly name, so
+// a TV that gates it (403 on protected sets) still yields a client: the
+// real verdict comes from Play, not the handshake.
 func Dial(ctx context.Context, addr string) (*Client, error) {
 	host, port := splitAddr(addr, DefaultPort)
 	c := &Client{
-		host: host,
-		port: port,
-		http: &http.Client{Timeout: 10 * time.Second},
+		host:    host,
+		port:    port,
+		http:    &http.Client{Timeout: 10 * time.Second},
+		session: newSessionID(),
 	}
 	name, err := c.serverInfo(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("airplay: dial %s: %w", host, err)
+		dbg.Log("airplay: dial %s:%s handshake failed (%s), continuing without a name",
+			host, port, scrubErr(err))
+	} else {
+		dbg.Log("airplay: dial %s:%s ok (%q)", host, port, name)
 	}
 	c.device = name
-	dbg.Log("airplay: dial %s:%s ok (%q)", host, port, name)
 	return c, nil
 }
 
@@ -112,12 +133,30 @@ func (c *Client) httpClient() *http.Client {
 	return &http.Client{Timeout: 10 * time.Second}
 }
 
+// statusError is a non-2xx answer with its coordinates attached, so callers
+// that know an endpoint's semantics (Play) can translate codes into guidance
+// instead of printing a bare status.
+type statusError struct {
+	method string
+	path   string
+	code   int
+	status string
+}
+
+func (e *statusError) Error() string {
+	return fmt.Sprintf("airplay: %s %s: %s", e.method, e.path, e.status)
+}
+
 // do sends one AirPlay request, mapping a 401 to an auth error that tells
 // the operator the fix lives on the TV, not here.
 func (c *Client) do(ctx context.Context, method, path, contentType string, body io.Reader) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, method, c.base()+path, body)
 	if err != nil {
 		return nil, err
+	}
+	req.Header.Set("User-Agent", userAgent)
+	if c.session != "" {
+		req.Header.Set("X-Apple-Session-ID", c.session)
 	}
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
@@ -135,7 +174,7 @@ func (c *Client) do(ctx context.Context, method, path, contentType string, body 
 		return nil, fmt.Errorf("airplay: tv requires a password: allow everyone (or disable the password) in the Apple TV AirPlay settings, then retry")
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("airplay: %s %s: %s", method, path, resp.Status)
+		return nil, &statusError{method: method, path: path, code: resp.StatusCode, status: resp.Status}
 	}
 	return raw, nil
 }
@@ -163,6 +202,14 @@ func (c *Client) Play(ctx context.Context, streamURL string, start float64) erro
 	dbg.Log("airplay: PLAY %s", dbg.ShortURL(streamURL))
 	_, err := c.do(ctx, http.MethodPost, "/play", "text/x-apple-plist+xml",
 		strings.NewReader(playPlist(streamURL, start)))
+	if se, ok := err.(*statusError); ok {
+		switch se.code {
+		case http.StatusForbidden:
+			return fmt.Errorf("airplay: tv refused to play: it likely needs device verification, an on-screen code, or a password — set AirPlay to allow everyone (or allow the first-time code) in the TV's AirPlay settings, then retry")
+		case http.StatusNotFound:
+			return fmt.Errorf("airplay: tv has no /play endpoint: it probably speaks AirPlay 2 only (common on Roku/TCL/Google TV sets), which this client does not implement")
+		}
+	}
 	return err
 }
 

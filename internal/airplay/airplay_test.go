@@ -23,6 +23,15 @@ type fakeTV struct {
 	noInfo bool
 	// auth makes /play 401 like a password-protected TV.
 	auth bool
+	// infoStatus overrides the /server-info status (e.g. 403 for a TV that
+	// gates the handshake but may still take /play).
+	infoStatus int
+	// playStatus overrides the /play status (e.g. 404 on AirPlay-2-only TVs
+	// that have no /play endpoint at all).
+	playStatus int
+	// lastUA and lastSession record the headers of the most recent /play.
+	lastUA      string
+	lastSession string
 }
 
 func (f *fakeTV) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -33,6 +42,12 @@ func (f *fakeTV) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
+		if f.playStatus != 0 {
+			http.Error(w, http.StatusText(f.playStatus), f.playStatus)
+			return
+		}
+		f.lastUA = r.Header.Get("User-Agent")
+		f.lastSession = r.Header.Get("X-Apple-Session-ID")
 		body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 		f.playBody, f.playHits = string(body), f.playHits+1
 		w.WriteHeader(http.StatusOK)
@@ -45,6 +60,10 @@ func (f *fakeTV) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "/server-info":
 		if f.noInfo {
 			http.NotFound(w, r)
+			return
+		}
+		if f.infoStatus != 0 {
+			http.Error(w, http.StatusText(f.infoStatus), f.infoStatus)
 			return
 		}
 		w.Header().Set("Content-Type", "text/x-apple-plist+xml")
@@ -195,5 +214,71 @@ func TestProbeFallsBackToAddress(t *testing.T) {
 	d := Probe(addr)
 	if d.Name == "" || d.Addr == "" {
 		t.Fatalf("Probe = %+v, want address fallback", d)
+	}
+}
+
+func TestDialToleratesForbiddenServerInfo(t *testing.T) {
+	// A protected TV gates /server-info (403) but may still take /play:
+	// Dial must not fail on the handshake alone. The real verdict comes
+	// from Play.
+	tv := &fakeTV{infoStatus: http.StatusForbidden}
+	c, _ := testClient(t, tv)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := c.Play(ctx, "http://provider.example/live/1.m3u8", 0); err != nil {
+		t.Fatalf("Play after 403 server-info: %v", err)
+	}
+	if tv.playHits != 1 {
+		t.Fatalf("playHits = %d, want 1", tv.playHits)
+	}
+}
+
+func TestRequestsCarryAirPlayHeaders(t *testing.T) {
+	// Picky receivers refuse clients that do not look like Apple software,
+	// so every request carries a first-party User-Agent and session ID.
+	tv := &fakeTV{}
+	c, _ := testClient(t, tv)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := c.Play(ctx, "http://provider.example/live/1.m3u8", 0); err != nil {
+		t.Fatalf("Play: %v", err)
+	}
+	if !strings.Contains(tv.lastUA, "AirPlay") {
+		t.Fatalf("User-Agent = %q, want something Apple-like", tv.lastUA)
+	}
+	if tv.lastSession == "" {
+		t.Fatal("X-Apple-Session-ID missing")
+	}
+}
+
+func TestPlayForbiddenMeansProtected(t *testing.T) {
+	tv := &fakeTV{playStatus: http.StatusForbidden}
+	c, _ := testClient(t, tv)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err := c.Play(ctx, "http://provider.example/live/1.m3u8", 0)
+	if err == nil {
+		t.Fatal("Play with 403 = nil, want protection error")
+	}
+	msg := strings.ToLower(err.Error())
+	if !strings.Contains(msg, "allow everyone") && !strings.Contains(msg, "code") &&
+		!strings.Contains(msg, "password") && !strings.Contains(msg, "verification") {
+		t.Fatalf("error %q does not explain the TV-side fix", err)
+	}
+}
+
+func TestPlayNotFoundMeansAirPlay2Only(t *testing.T) {
+	// AirPlay-2-only TVs (many Roku/TCL/Google TV sets) have no /play
+	// endpoint at all: a 404 must say so instead of printing a bare status.
+	tv := &fakeTV{playStatus: http.StatusNotFound}
+	c, _ := testClient(t, tv)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err := c.Play(ctx, "http://provider.example/live/1.m3u8", 0)
+	if err == nil {
+		t.Fatal("Play with 404 = nil, want AirPlay 2 error")
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "airplay 2") {
+		t.Fatalf("error %q does not name AirPlay 2", err)
 	}
 }

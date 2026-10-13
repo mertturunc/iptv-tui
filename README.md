@@ -162,9 +162,11 @@ guessed. HLS playlists are rewritten so segments stay behind the proxy; DASH
 sheet polls `/playback-info` every 2s for state and position, with the same
 proxy-throughput sparkline as Chromecast. Honest limits: AirPlay video is the
 unauthenticated (v1) protocol, so the TV must allow everyone — a TV with an
-AirPlay password answers 401, and the app says so instead of failing
-silently. Password-protected TVs need the password disabled (or "Allow
-Everyone") in the Apple TV AirPlay settings.
+AirPlay password answers 401, a TV gating the handshake answers 403, and the
+app says what to change in the TV's AirPlay settings instead of failing
+silently. Sets with no `/play` endpoint at all (many Roku/TCL/Google TV
+models) speak AirPlay 2 only, which this client does not implement — the app
+names that too.
 
 ## Themes
 
