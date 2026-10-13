@@ -1,8 +1,7 @@
 #!/bin/sh
 # Pre-commit guardrail: the fast subset of the README Development commands.
-# Full `go test ./...` runs in CI instead: the dbg suite is darwin-fragile
-# (os.UserConfigDir ignores $HOME on macOS), so the suite cannot gate local
-# commits on every platform.
+# `go test -short ./...` (E2E excluded via testing.Short) runs here; the
+# environment-sensitive headless E2E stays in the dedicated macOS CI job.
 #
 # Exit codes are checked directly, never through a pipe: `cmd | tail`
 # returns tail's status and would let a red tree commit.
@@ -23,7 +22,12 @@ go vet ./... || {
 	exit 1
 }
 
+go test -short ./... || {
+	echo "pre-commit: tests failed"
+	exit 1
+}
+
 # vet compiles every package (including main) without emitting binaries,
 # so this is also the compile check — and it cannot leave a stray
 # ./iptv-tui binary behind the way `go build ./...` does.
-echo "pre-commit: fmt + vet clean"
+echo "pre-commit: fmt + vet + tests clean"
