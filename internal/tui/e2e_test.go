@@ -1,5 +1,3 @@
-//go:build !short
-
 package tui
 
 import (
@@ -39,6 +37,9 @@ func (k *keyScript) Read(p []byte) (int, error) {
 // renderer included. Unit tests call Update with pre-parsed keys; this one
 // proves the bytes survive input parsing and reach the screen.
 func TestHeadlessThemeSwitchE2E(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping environment-sensitive headless E2E in short mode")
+	}
 	t.Chdir(t.TempDir()) // cycleTheme saves settings; keep it out of the repo
 	defer ApplyThemeIndex(0)
 	prev := lipgloss.ColorProfile()

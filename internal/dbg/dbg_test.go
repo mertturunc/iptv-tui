@@ -68,7 +68,11 @@ func TestInitClearsLog(t *testing.T) {
 	t.Setenv("HOME", dir)
 	Init("test", []string{"iptv-tui"})
 	p := Path()
-	if filepath.Dir(p) != filepath.Join(dir, "iptv-tui") {
+	cfgDir, err := os.UserConfigDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Dir(p) != filepath.Join(cfgDir, "iptv-tui") {
 		t.Fatalf("unexpected log path %q", p)
 	}
 	if _, err := os.Stat(p); err != nil {
