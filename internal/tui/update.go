@@ -163,6 +163,7 @@ func (m *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case "?", "F1":
 		m.mode = modeHelp
+		m.helpScroll = 0
 		return m, nil
 	case "/", "ctrl+f":
 		m.mode = modeSearch
@@ -467,10 +468,43 @@ func (m *App) onSourceLoaded(v sourceLoadedMsg) {
 	}
 }
 
-// helpStep drives the help sheet. Left/right preview the palette ring in
-// place; esc and every other key close the sheet (the previous behavior).
+// helpStep drives the help sheet. Up/down scrolls the bindings when they do
+// not all fit; left/right preview the palette ring in place; esc and every
+// other key close the sheet (the previous behavior).
 func (m *App) helpStep(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	total := len(helpRows())
+	avail := helpPageSize(m.bodyH() - 2)
+	maxStart := total - avail
+	if maxStart < 0 {
+		maxStart = 0
+	}
 	switch msg.String() {
+	case "up", "k", "pgup":
+		if msg.String() == "pgup" {
+			m.helpScroll -= avail
+		} else {
+			m.helpScroll--
+		}
+		if m.helpScroll < 0 {
+			m.helpScroll = 0
+		}
+		return m, nil
+	case "down", "j", "pgdown":
+		if msg.String() == "pgdown" {
+			m.helpScroll += avail
+		} else {
+			m.helpScroll++
+		}
+		if m.helpScroll > maxStart {
+			m.helpScroll = maxStart
+		}
+		return m, nil
+	case "home", "g":
+		m.helpScroll = 0
+		return m, nil
+	case "end", "G":
+		m.helpScroll = maxStart
+		return m, nil
 	case "left", "right":
 		if msg.String() == "left" {
 			m.cycleTheme(-1)

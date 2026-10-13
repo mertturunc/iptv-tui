@@ -149,6 +149,8 @@ type App struct {
 
 	mode mode
 
+	helpScroll int
+
 	searchIn     textinput.Model
 	searchFilter string
 	addForm      *addForm

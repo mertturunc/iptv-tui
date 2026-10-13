@@ -19,7 +19,7 @@ Chromecast: `c`/`C`
 AirPlay: `v`/`V`/`A`
 Stop all: `x`/`X`
 Keep mpv on quit: `m`/`K`
-Help: `?`/`F1`
+Help: `?`/`F1` (help overlay scrolls with `up`/`down` when bindings overflow)
 Quit: `q`/`Q`/`ctrl+c`
 
 ## Series

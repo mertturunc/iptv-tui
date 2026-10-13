@@ -101,7 +101,7 @@ TUI keys (see `?` in-app):
 - `tab`, `left/right`: switch season/episode panes inside a series · `backspace`/`esc`: back to series list (also clears a pending number entry)
 - `e`/`i`: EPG · `#` or `0-9` + `enter`: jump by channel number · `1/2/3`: Live/Movies/Series (Xtream)
 - `s`/`S`: sources · `a`/`n`/`+`: add source · `k` in add form: toggle m3u/xtream · `d` in sources: delete source · `r`/`R`: reload · `x`/`X`: stop mpv and TVs (mpv first) · `m`/`K`: keep-mpv-on-quit · `q`/`Q`: quit
-- `?`/`F1`: help · `←/→` inside help: switch theme · `esc`: back
+- `?`/`F1`: help · `↑/↓` inside help: scroll bindings when they overflow · `←/→` inside help: switch theme · `esc`: back
 
 Player settings (`MpvPath`, `MpvArgs` one-per-line, `DefaultUserAgent`) live in config.json alongside `KeepMpvOnQuit`, `Theme`, `CastTV`, and `AirPlayTV`.
 

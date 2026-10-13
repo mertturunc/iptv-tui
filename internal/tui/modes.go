@@ -20,8 +20,8 @@ type modeSpec struct {
 var modeSpecs = map[mode]modeSpec{
 	modeHelp: {
 		step:    (*App).helpStep,
-		overlay: func(m *App, frame int) string { return helpView(m.width-16, frame-2) },
-		hints:   func() []keyHint { return []keyHint{{"esc", "back"}} },
+		overlay: func(m *App, frame int) string { return helpView(m.width-16, frame-2, m.helpScroll) },
+		hints:   func() []keyHint { return []keyHint{{"up/down", "scroll"}, {"esc", "back"}} },
 	},
 	modeSearch: {
 		step:  (*App).searchStep,
@@ -121,6 +121,14 @@ func (m *App) overlayFor(frame int) string {
 // footerHints resolves the footer key hints: the mode's table entry, or the
 // main-mode hints when the mode declares none.
 func (m *App) footerHints() []keyHint {
+	if m.mode == modeHelp {
+		if helpPageSize(m.bodyH()-2) < len(helpRows()) {
+			if spec, ok := modeSpecs[m.mode]; ok && spec.hints != nil {
+				return spec.hints()
+			}
+		}
+		return []keyHint{{"esc", "back"}}
+	}
 	if spec, ok := modeSpecs[m.mode]; ok && spec.hints != nil {
 		return spec.hints()
 	}

@@ -236,8 +236,14 @@ func (e *epgView) View(width, height int) string {
 
 // ---------- Help ----------
 
-func helpView(width, height int) string {
-	rows := []struct{ k, what string }{
+// helpRow is one line of the help sheet.
+type helpRow struct{ k, what string }
+
+// helpRows is the full help sheet in the order it matters. It is a function so
+// the glyph tokens (which may change under --ascii) are resolved at render
+// time rather than baked in at package init.
+func helpRows() []helpRow {
+	return []helpRow{
 		{glyphArrowUpDown + "/pgup/pgdn", "navigate list"},
 		{"tab / " + glyphArrowLeft + " " + glyphArrowRight, "switch group " + glyphAngleOpen + glyphAngleClose + " channel panes"},
 		{"enter / space", "play channel / expand series"},
@@ -260,13 +266,45 @@ func helpView(width, height int) string {
 		{"?", "this help"},
 		{"q / esc", "quit"},
 		{glyphArrowLeft + " " + glyphArrowRight, "switch theme"},
+		{glyphArrowUpDown + " / pgup / pgdn", "scroll this help (when it overflows)"},
 	}
-	// A short terminal cannot hold the whole sheet. Show what fits, in the order
-	// it matters, and count the rest in the footer: cutting bindings off in
-	// silence is how a console loses trust, saying so is how it keeps it.
-	shown, hidden := rows, 0
-	if avail := height - 7; avail > 0 && avail < len(rows) {
-		shown, hidden = rows[:avail], len(rows)-avail
+}
+
+// helpPageSize is how many binding rows fit on a help sheet of the given
+// height. Both the renderer and the key handler share it so the scroll step
+// and the visible window can never disagree.
+func helpPageSize(height int) int {
+	avail := height - 7
+	if avail < 1 {
+		avail = 1
+	}
+	return avail
+}
+
+// helpView renders the help sheet. When the terminal is too short to show
+// every binding, the sheet becomes scrollable: `scroll` is the index of the
+// first binding shown, clamped to the valid range, and the user moves through
+// it with the up/down arrows instead of being told to resize.
+func helpView(width, height int, scroll ...int) string {
+	rows := helpRows()
+	off := 0
+	if len(scroll) > 0 {
+		off = scroll[0]
+	}
+	// A short terminal cannot hold the whole sheet; show a window of it and
+	// let the caller scroll. The footer no longer begs for a resize.
+	avail := helpPageSize(height)
+	shown := rows
+	scrollable := avail > 0 && avail < len(rows)
+	if scrollable {
+		if off < 0 {
+			off = 0
+		}
+		maxStart := len(rows) - avail
+		if off > maxStart {
+			off = maxStart
+		}
+		shown = rows[off : off+avail]
 	}
 	// Size the key column to the sheet so no description wraps mid-phrase, and
 	// clip any that still do not fit rather than letting them break the frame.
@@ -278,8 +316,8 @@ func helpView(width, height int) string {
 		fmt.Fprintf(&b, "  %-*s %s\n", keyW, sigBold(colSignal, r.k), ellipsize(r.what, room))
 	}
 	keys := "esc=back  " + glyphSeparator + "  " + glyphArrowLeft + " " + glyphArrowRight + " theme: " + CurrentThemeName()
-	if hidden > 0 {
-		keys += fmt.Sprintf("  %s  %d more below, resize to read", glyphSeparator, hidden)
+	if scrollable {
+		keys += "  " + glyphSeparator + "  " + glyphArrowUpDown + " scroll"
 	}
 	return panelBox(width, lipgloss.Height(b.String())+2, b.String()+"  "+dim(keys))
 }
