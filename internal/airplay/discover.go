@@ -122,19 +122,27 @@ func txtVal(text []string, key string) string {
 
 // videoCaps reads the advertised features bits: bit 0 is legacy v1 video
 // (the /play endpoint this client speaks), bit 49 is AirPlay 2 video.
-// Broadcasts are hex ("0x…", sometimes comma-separated words — the low word
-// carries the v1 bit); decimal is accepted as a fallback.
+// Broadcasts are hex words with a 0x prefix ("0xBCF46,0x7F8AD0"); two
+// comma-separated words form one 64-bit value, high word first. A bare
+// word is decimal first ("130367356919"), hex as fallback.
 func videoCaps(features string) (v1, v2 bool) {
-	f := strings.TrimSpace(features)
-	if i := strings.Index(f, ","); i >= 0 {
-		f = f[:i]
-	}
-	f = strings.TrimPrefix(strings.TrimSpace(f), "0x")
-	n, err := strconv.ParseUint(f, 16, 64)
-	if err != nil {
-		if n, err = strconv.ParseUint(strings.TrimSpace(features), 10, 64); err != nil {
+	var n uint64
+	for _, part := range strings.Split(features, ",") {
+		p := strings.TrimSpace(part)
+		var w uint64
+		var err error
+		switch {
+		case strings.HasPrefix(p, "0x") || strings.HasPrefix(p, "0X"):
+			w, err = strconv.ParseUint(p[2:], 16, 64)
+		default:
+			if w, err = strconv.ParseUint(p, 10, 64); err != nil {
+				w, err = strconv.ParseUint(p, 16, 64)
+			}
+		}
+		if err != nil {
 			return false, false
 		}
+		n = n<<32 | w
 	}
 	return n&1 != 0, n&(1<<49) != 0
 }

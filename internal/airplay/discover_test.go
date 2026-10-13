@@ -70,10 +70,11 @@ func TestVideoCaps(t *testing.T) {
 		features string
 		v1, v2   bool
 	}{
-		{"0x1", true, false},             // only legacy video bit
-		{"0x2000000000000", false, true}, // only AirPlay 2 video bit (bit 49)
-		{"0x2000000000001", true, true},  // both
-		{"1", true, false},               // decimal broadcast
+		{"0x1", true, false},              // only legacy video bit
+		{"0x2000000000000", false, true},  // only AirPlay 2 video bit (bit 49)
+		{"0x2000000000001", true, true},   // both
+		{"1", true, false},                // decimal broadcast
+		{"0x7F8AD0,0xBCF46", false, true}, // TCL Google TV: v2 video only
 		{"garbage", false, false},
 		{"", false, false},
 	}
