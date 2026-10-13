@@ -85,6 +85,18 @@ var modeSpecs = map[mode]modeSpec{
 			return []keyHint{{"enter", "cast"}, {"up/down", "pick TV"}, {"r", "rescan"}, {"esc", "back (x stops TV)"}}
 		},
 	},
+	modeAirplay: {
+		step: (*App).airStep,
+		overlay: func(m *App, frame int) string {
+			if m.airForm == nil {
+				return ""
+			}
+			return m.airForm.View(m.width-8, frame-2)
+		},
+		hints: func() []keyHint {
+			return []keyHint{{"enter", "play"}, {"up/down", "pick TV"}, {"r", "rescan"}, {"esc", "back (x stops TV)"}}
+		},
+	},
 }
 
 // routeKey sends a key to the active mode's step handler, reporting false for

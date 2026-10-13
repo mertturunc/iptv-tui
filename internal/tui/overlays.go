@@ -243,6 +243,7 @@ func helpView(width, height int) string {
 		{"enter", "play channel / expand series"},
 		{"o", "play channel"},
 		{"c", "send channel to Google TV (Chromecast)"},
+		{"v", "send channel to Apple TV (AirPlay)"},
 		{"f", "toggle favorite"},
 		{"/", "filter channels"},
 		{"g", "jump to group pane"},

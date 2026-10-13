@@ -84,6 +84,24 @@ func (m *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case castScanMsg:
 		m.onScanMsg(v)
 		return m, nil
+	case airDoneMsg:
+		return m, m.onAirDone(v)
+	case airStopMsg:
+		m.onAirStop(v)
+		return m, nil
+	case airTickMsg:
+		// Re-arm only while a session lives and no play/stop is in flight.
+		if m.airForm != nil && m.airForm.client != nil && !m.airForm.busy {
+			m.pollAirStats()
+			return m, airTick()
+		}
+		return m, nil
+	case airStatMsg:
+		m.onAirStat(v)
+		return m, nil
+	case airScanMsg:
+		m.onAirScan(v)
+		return m, nil
 	case epgBgLoadedMsg:
 		// Background per-channel refresh; ignore if the user has moved on.
 		if m.mode == modeEpg && m.epg.title == v.title {
@@ -181,6 +199,11 @@ func (m *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.stopCast()
 			stopped = true
 		}
+		if m.airForm != nil && m.airForm.client != nil {
+			m.setStatus("stopping Apple TV"+glyphEllipsis, false)
+			m.stopAirplay()
+			stopped = true
+		}
 		if !stopped {
 			m.setStatus("nothing playing", false)
 		}
@@ -234,6 +257,9 @@ func (m *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.onPlaySelected()
 	case "c":
 		m.openCast()
+		return m, nil
+	case "v":
+		m.openAirplay()
 		return m, nil
 	case "esc":
 		if m.numBuf != "" {

@@ -119,8 +119,9 @@ type Settings struct {
 	MpvArgs          string `json:"mpvArgs,omitempty"` // one per line custom mpv args
 	DefaultUserAgent string `json:"defaultUserAgent,omitempty"`
 	KeepMpvOnQuit    bool   `json:"keepMpvOnQuit,omitempty"`
-	Theme            string `json:"theme,omitempty"`  // palette name, e.g. "Dracula"
-	CastTV           string `json:"castTV,omitempty"` // last Chromecast target host
+	Theme            string `json:"theme,omitempty"`     // palette name, e.g. "Dracula"
+	CastTV           string `json:"castTV,omitempty"`    // last Chromecast target host
+	AirPlayTV        string `json:"airPlayTV,omitempty"` // last AirPlay target host
 }
 
 type Config struct {
@@ -452,6 +453,18 @@ func (s *Store) SetCastTV(addr string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.Cfg.Settings.CastTV = addr
+}
+
+func (s *Store) AirPlayTV() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.Cfg.Settings.AirPlayTV
+}
+
+func (s *Store) SetAirPlayTV(addr string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Cfg.Settings.AirPlayTV = addr
 }
 
 // RandomID returns a short random identifier for a new source.

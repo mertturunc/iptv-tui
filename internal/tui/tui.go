@@ -98,6 +98,7 @@ const (
 	modeHelp
 	modeMpv
 	modeCast
+	modeAirplay
 )
 
 type groupKind string
@@ -155,6 +156,7 @@ type App struct {
 	srcOverlay   *list.Model
 	mpvForm      *mpvForm
 	castForm     *castForm
+	airForm      *airForm
 
 	spinner   spinner.Model
 	busy      bool

@@ -97,13 +97,13 @@ iptv-tui -ascii       # plain-ASCII rendering (also IPTV_TUI_ASCII=1)
 TUI keys (see `?` in-app):
 
 - `up/down`, `pgup/pgdn`: navigate · `tab`, `left/right` (`h`/`l`): switch group/channel panes · `g`: jump to group pane
-- `enter`: play channel / expand series · `o`: play (expands a series container, which has no direct stream) · `c`: send to TV (Chromecast) · `f`: favorite · `/`: filter
+- `enter`: play channel / expand series · `o`: play (expands a series container, which has no direct stream) · `c`: send to TV (Chromecast) · `v`: send to Apple TV (AirPlay) · `f`: favorite · `/`: filter
 - `tab`, `left/right`: switch season/episode panes inside a series · `backspace`/`esc`: back to series list (also clears a pending `0-9` number entry)
 - `e`: EPG · `0-9` + `enter`: jump by channel number · `1/2/3`: Live/Movies/Series (Xtream)
-- `s`: sources · `a`: add source · `k` in add form: toggle m3u/xtream · `d` in sources: delete source · `r`: reload · `x`: stop mpv and TV (mpv first) · `m`: keep-mpv-on-quit · `q`: quit
+- `s`: sources · `a`: add source · `k` in add form: toggle m3u/xtream · `d` in sources: delete source · `r`: reload · `x`: stop mpv and TVs (mpv first) · `m`: keep-mpv-on-quit · `q`: quit
 - `?`: help · `←/→` inside help: switch theme · `esc`: back
 
-Player settings (`MpvPath`, `MpvArgs` one-per-line, `DefaultUserAgent`) live in config.json alongside `KeepMpvOnQuit`, `Theme`, and `CastTV`.
+Player settings (`MpvPath`, `MpvArgs` one-per-line, `DefaultUserAgent`) live in config.json alongside `KeepMpvOnQuit`, `Theme`, `CastTV`, and `AirPlayTV`.
 
 Playback position is tracked for VOD/series and resumed with `--start` on next launch.
 That needs `mpv`: without it the app falls back to VLC, then MPC-HC, which play
@@ -143,6 +143,28 @@ sparkline in graph. Drift (wall-clock minus media-time) and a stall counter
 complete the picture; the playbar carries state, position, and Mbps
 at a glance. Honest limits: receivers never report download speed, so the
 Mbps number is measured proxy throughput — direct casts show none.
+
+## Send to TV (AirPlay)
+
+Press `v` on any channel to send it to an Apple TV on your network. The sheet
+works like the Chromecast one: it scans the LAN for AirPlay receivers (pick
+with `up/down`, rescan with `r` on an empty address field), or type the TV
+address by hand. `enter` plays on the typed address, the picked TV, or the
+last TV in that order; `x` in the main view stops the Apple TV (it stops mpv
+first when both run). The last good TV is remembered in settings. The TV keeps
+playing after you quit, like keep-mpv-on-quit — except proxied plays below,
+which end with the process serving them.
+
+How it travels: the same proxy as Chromecast, so provider headers
+(User-Agent, Referer) are injected server-side and throughput is measured, not
+guessed. HLS playlists are rewritten so segments stay behind the proxy; DASH
+(`.mpd`) plays direct, with no headers and no bitrate. While playing, the
+sheet polls `/playback-info` every 2s for state and position, with the same
+proxy-throughput sparkline as Chromecast. Honest limits: AirPlay video is the
+unauthenticated (v1) protocol, so the TV must allow everyone — a TV with an
+AirPlay password answers 401, and the app says so instead of failing
+silently. Password-protected TVs need the password disabled (or "Allow
+Everyone") in the Apple TV AirPlay settings.
 
 ## Themes
 
@@ -189,10 +211,12 @@ Source lists and EPG indexes are cached to disk, so startup works offline and is
 - `internal/player`: `mpv` launch, IPC position tracking
 - `internal/cast`: Chromecast send-to-TV (LAN scan, Castv2 sender, LAN proxy
   with HLS rewrite, receiver status polling, no cgo)
+- `internal/airplay`: AirPlay send-to-TV (LAN scan, v1 HTTP play/stop/status,
+  no pairing; reuses the `cast` LAN proxy for headers and bitrate)
 - `internal/store`: config, favorites, history (mutex-guarded; snapshots for background use)
 - `internal/tui`: Bubble Tea UI (`tui` shell/chrome, `modes` dispatch table,
   `update` main keys, `view` paint, `playback`, `series`, `epgview`,
-  `sources`, `cast`, `overlays`, `theme`)
+  `sources`, `cast`, `airplay`, `overlays`, `theme`)
 - `build-release.ps1`: release packaging
 
 ## Development

@@ -113,6 +113,9 @@ func (m *App) layout() {
 	if m.castForm != nil {
 		m.castForm.Resize(m.width - 6)
 	}
+	if m.airForm != nil {
+		m.airForm.Resize(m.width - 6)
+	}
 }
 
 func (m *App) channelPaneTitle() string {
@@ -641,27 +644,29 @@ func clock(d time.Duration) string {
 // instead of sitting blank. At rest the row reads "no signal" and stays
 // engraved.
 func (m *App) renderPlaybar() string {
-	if m.playing == nil && (m.castForm == nil || !m.castForm.casting) {
+	if m.playing == nil && !m.tvCasting() {
 		return lipgloss.NewStyle().Width(m.width).Render(
 			headendRule.Render(glyphPlaying) + " " + muted("no signal"))
 	}
 	if m.playing == nil {
-		// A cast outlives the terminal session: the strip names the TV and
-		// what it is showing while no local player runs, with the receiver
-		// state and measured bitrate when samples have arrived.
+		// A TV session outlives the terminal session: the strip names the TV
+		// and what it is showing while no local player runs, with the
+		// receiver state and measured bitrate when samples have arrived.
+		// AirPlay wins the strip when both TVs run: it was started last.
+		title, name := m.tvProgram()
 		left := success(glyphPlaying) + " TV " + glyphSeparator + " " +
-			ellipsize(m.castForm.title, clamp(m.width/3, 12, 30))
+			ellipsize(title, clamp(m.width/3, 12, 30))
 		var rp []string
-		if s, ok := m.castForm.latest(); ok {
+		if s, ok := m.tvLatest(); ok {
 			rp = append(rp, s.state)
 			if s.pos > 0 {
 				rp = append(rp, clock(time.Duration(s.pos*float64(time.Second))))
 			}
 		}
-		if mbps, ok := m.castForm.bitrate(); ok {
+		if mbps, ok := m.tvBitrate(); ok {
 			rp = append(rp, fmt.Sprintf("%.1f Mbps", mbps))
 		}
-		rp = append(rp, m.castForm.target.Name)
+		rp = append(rp, name)
 		right := muted(strings.Join(rp, "  "))
 		row := left
 		if gap := m.width - lipgloss.Width(left) - lipgloss.Width(right); gap > 2 {
