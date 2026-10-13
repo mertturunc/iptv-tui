@@ -25,3 +25,6 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+# local build output
+iptv-tui
+iptv-tui.exe
