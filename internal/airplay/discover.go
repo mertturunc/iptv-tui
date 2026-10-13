@@ -3,6 +3,7 @@ package airplay
 import (
 	"context"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -57,7 +58,9 @@ func browse(ctx context.Context, interval time.Duration, emit func([]Device), ou
 	defer func() {
 		dbg.Log("airplay: scan done in %s: %d TV(s)", time.Since(start).Round(100*time.Millisecond), len(*out))
 		for _, d := range *out {
-			dbg.Log("airplay: scan found %q at %s", d.Name, d.Addr)
+			v1, v2 := videoCaps(d.Features)
+			dbg.Log("airplay: scan found %q at %s model=%s features=%s v1video=%v v2video=%v",
+				d.Name, d.Addr, d.Model, d.Features, v1, v2)
 		}
 	}()
 	var ticker <-chan time.Time
@@ -106,6 +109,36 @@ func deviceAddr(e *zeroconf.ServiceEntry) string {
 	return strings.TrimSuffix(e.HostName, ".")
 }
 
+// txtVal returns the value of key in an mDNS TXT record ("key=value"
+// strings), or "" when absent.
+func txtVal(text []string, key string) string {
+	for _, t := range text {
+		if k, v, ok := strings.Cut(t, "="); ok && k == key {
+			return v
+		}
+	}
+	return ""
+}
+
+// videoCaps reads the advertised features bits: bit 0 is legacy v1 video
+// (the /play endpoint this client speaks), bit 49 is AirPlay 2 video.
+// Broadcasts are hex ("0x…", sometimes comma-separated words — the low word
+// carries the v1 bit); decimal is accepted as a fallback.
+func videoCaps(features string) (v1, v2 bool) {
+	f := strings.TrimSpace(features)
+	if i := strings.Index(f, ","); i >= 0 {
+		f = f[:i]
+	}
+	f = strings.TrimPrefix(strings.TrimSpace(f), "0x")
+	n, err := strconv.ParseUint(f, 16, 64)
+	if err != nil {
+		if n, err = strconv.ParseUint(strings.TrimSpace(features), 10, 64); err != nil {
+			return false, false
+		}
+	}
+	return n&1 != 0, n&(1<<49) != 0
+}
+
 // collect dedupes responders by address (a TV answers on several interfaces)
 // and sorts by name for a stable sheet.
 func collect(entries []*zeroconf.ServiceEntry) []Device {
@@ -117,7 +150,12 @@ func collect(entries []*zeroconf.ServiceEntry) []Device {
 			continue
 		}
 		seen[addr] = true
-		out = append(out, Device{Name: deviceName(e), Addr: addr})
+		out = append(out, Device{
+			Name:     deviceName(e),
+			Addr:     addr,
+			Model:    txtVal(e.Text, "model"),
+			Features: txtVal(e.Text, "features"),
+		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out

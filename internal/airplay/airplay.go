@@ -27,10 +27,15 @@ import (
 const DefaultPort = "7000"
 
 // Device is an AirPlay target: the TV's friendly name plus its LAN address
-// (bare host; host:port is honored when given).
+// (bare host; host:port is honored when given). Model and Features carry
+// the mDNS TXT advertisement for diagnostics: Features names the capability
+// bits (bit 0 = legacy v1 video, bit 49 = AirPlay 2 video), so a refusal
+// can be told apart from a TV that never spoke v1 at all.
 type Device struct {
-	Name string
-	Addr string
+	Name     string
+	Addr     string
+	Model    string
+	Features string
 }
 
 // PlaybackInfo is the receiver's answer to /playback-info: where playback
