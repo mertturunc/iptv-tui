@@ -5,14 +5,13 @@ on:
   pull_request:
 
 jobs:
-  check:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      # No pipes: each command's own exit code gates the job.
       - name: gofmt
         run: test -z "$(gofmt -l .)"
       - name: vet
@@ -23,3 +22,13 @@ jobs:
         run: GOOS=windows go build ./...
       - name: cross-compile darwin
         run: GOOS=darwin go build ./...
+  e2e:
+    name: e2e (headless theme)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Run headless E2E
+        run: go test ./internal/tui/ -run TestHeadlessThemeSwitchE2E -count=1 -v
