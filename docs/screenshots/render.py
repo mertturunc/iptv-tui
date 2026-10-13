@@ -14,6 +14,16 @@ import os
 import re
 import sys
 
+try:
+    from PIL import Image  # noqa: F401
+except ImportError:
+    print(
+        "Pillow is required. Install it with: "
+        "python3 -m pip install -r docs/screenshots/requirements.txt",
+        file=sys.stderr,
+    )
+    sys.exit(2)
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 GROUND = (0x1D, 0x20, 0x21)  # colGround #1d2021

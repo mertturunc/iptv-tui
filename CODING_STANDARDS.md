@@ -6,3 +6,4 @@
 - Overlay forms in `internal/tui/overlays.go` and the form `Update` methods own printable keys unless a global key is explicitly required and forwarded.
 - Add or update targeted TUI tests for any new alias or binding.
 - Keep in-app help (`internal/tui/overlays.go` `helpView`), footer hints (`internal/tui/view.go` `mainKeyHints`), README "TUI keys", and `docs/keybindings.md` in sync.
+- Help overlay scrolling must keep `helpView` and `helpStep` on one shared `helpPageSize` helper; do not duplicate the row-window arithmetic (covered by `TestHelpScroll*`).

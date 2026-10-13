@@ -28,3 +28,6 @@ Thumbs.db
 # local build output
 iptv-tui
 iptv-tui.exe
+
+# generated intermediate frames for docs/screenshots (PNG/GIF are committed)
+docs/screenshots/*.ansi

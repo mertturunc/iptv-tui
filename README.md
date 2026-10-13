@@ -7,8 +7,11 @@ AI-native terminal IPTV client for M3U playlists and Xtream Codes portals. Brows
 ## Screenshots
 
 All shots use pseudo demo data (`Demo XC` source). Regenerate with
-`IPTV_TUI_GEN_SHOTS=1 go test ./internal/tui/ -run TestGenShots` plus
-`python3 docs/screenshots/render.py` (Pillow).
+`IPTV_TUI_GEN_SHOTS=1 go test ./internal/tui/ -run TestGenShots` (and
+`TestGenThemeShots` for the per-palette table), then install the renderer
+dependency once with
+`python3 -m pip install -r docs/screenshots/requirements.txt` and run
+`python3 docs/screenshots/render.py`.
 
 | Movies with resume meter | EPG guide |
 |---|---|
