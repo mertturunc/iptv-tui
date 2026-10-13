@@ -229,6 +229,18 @@ go test ./...
 gofmt -l .
 ```
 
+Guardrails: CI (`.github/workflows/ci.yml`) runs fmt, vet, the full suite,
+and windows/darwin cross-compiles on every push. A pre-commit hook runs the
+fast subset (fmt + vet) locally — enable it once per clone:
+
+```sh
+git config core.hooksPath .githooks
+```
+
+Full `go test ./...` stays out of the hook on purpose: `TestInitClearsLog`
+overrides `$HOME`, which `os.UserConfigDir` ignores on macOS, so the suite
+is red on darwin through no fault of the tree.
+
 Debug logging: `IPTV_TUI_DEBUG=1 iptv-tui` (also `true`/`yes`/`on`; anything else stays off) clears
 `<configDir>/iptv-tui/player-debug.log` on boot, prints its path, and records
 the cast path end to end (scan results, dial/launch/LOAD outcomes, receiver

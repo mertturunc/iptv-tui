@@ -1,0 +1,29 @@
+#!/bin/sh
+# Pre-commit guardrail: the fast subset of the README Development commands.
+# Full `go test ./...` runs in CI instead: the dbg suite is darwin-fragile
+# (os.UserConfigDir ignores $HOME on macOS), so the suite cannot gate local
+# commits on every platform.
+#
+# Exit codes are checked directly, never through a pipe: `cmd | tail`
+# returns tail's status and would let a red tree commit.
+set -u
+
+unformatted=$(gofmt -l .) || {
+	echo "pre-commit: gofmt failed to run"
+	exit 1
+}
+if [ -n "$unformatted" ]; then
+	echo "pre-commit: unformatted files (run gofmt -w on them):"
+	echo "$unformatted"
+	exit 1
+fi
+
+go vet ./... || {
+	echo "pre-commit: go vet failed"
+	exit 1
+}
+
+# vet compiles every package (including main) without emitting binaries,
+# so this is also the compile check — and it cannot leave a stray
+# ./iptv-tui binary behind the way `go build ./...` does.
+echo "pre-commit: fmt + vet clean"
