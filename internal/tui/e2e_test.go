@@ -1,3 +1,5 @@
+//go:build !short
+
 package tui
 
 import (
