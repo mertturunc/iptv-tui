@@ -750,15 +750,15 @@ func (m *App) castStep(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.startCast(ch)
 		return m, nil
-	case "r":
+	case "r", "R":
 		if m.castForm != nil && strings.TrimSpace(m.castForm.input.Value()) == "" {
 			m.startScan()
 			return m, nil
 		}
 		return m, m.castForm.Update(msg)
-	case "up", "down":
+	case "up", "down", "k", "j":
 		if m.castForm != nil && len(m.castForm.found) > 0 {
-			if msg.String() == "up" {
+			if msg.String() == "up" || msg.String() == "k" {
 				m.castForm.sel = (m.castForm.sel - 1 + len(m.castForm.found)) % len(m.castForm.found)
 			} else {
 				m.castForm.sel = (m.castForm.sel + 1) % len(m.castForm.found)

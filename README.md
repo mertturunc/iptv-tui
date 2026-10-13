@@ -96,12 +96,12 @@ iptv-tui -ascii       # plain-ASCII rendering (also IPTV_TUI_ASCII=1)
 
 TUI keys (see `?` in-app):
 
-- `up/down`, `pgup/pgdn`: navigate · `tab`, `left/right` (`h`/`l`): switch group/channel panes · `g`: jump to group pane
-- `enter`: play channel / expand series · `o`: play (expands a series container, which has no direct stream) · `c`: send to TV (Chromecast) · `v`: send to Apple TV (AirPlay) · `f`: favorite · `/`: filter
-- `tab`, `left/right`: switch season/episode panes inside a series · `backspace`/`esc`: back to series list (also clears a pending `0-9` number entry)
-- `e`: EPG · `0-9` + `enter`: jump by channel number · `1/2/3`: Live/Movies/Series (Xtream)
-- `s`: sources · `a`: add source · `k` in add form: toggle m3u/xtream · `d` in sources: delete source · `r`: reload · `x`: stop mpv and TVs (mpv first) · `m`: keep-mpv-on-quit · `q`: quit
-- `?`: help · `←/→` inside help: switch theme · `esc`: back
+- `up/down` (`j`/`k`), `pgup/pgdn`: navigate · `tab`, `left/right` (`h`/`l`): switch group/channel panes · `g`: jump to group pane · `[`/`]`: prev/next media tab
+- `enter`/`space`: play channel / expand series · `o`/`p`: play (expands a series container, which has no direct stream) · `c`: send to TV (Chromecast) · `v`/`A`: send to Apple TV (AirPlay) · `f`: favorite · `/`: filter · `*`: favorite
+- `tab`, `left/right`: switch season/episode panes inside a series · `backspace`/`esc`: back to series list (also clears a pending number entry)
+- `e`/`i`: EPG · `#` or `0-9` + `enter`: jump by channel number · `1/2/3`: Live/Movies/Series (Xtream)
+- `s`/`S`: sources · `a`/`n`/`+`: add source · `k` in add form: toggle m3u/xtream · `d` in sources: delete source · `r`/`R`: reload · `x`/`X`: stop mpv and TVs (mpv first) · `m`/`K`: keep-mpv-on-quit · `q`/`Q`: quit
+- `?`/`F1`: help · `←/→` inside help: switch theme · `esc`: back
 
 Player settings (`MpvPath`, `MpvArgs` one-per-line, `DefaultUserAgent`) live in config.json alongside `KeepMpvOnQuit`, `Theme`, `CastTV`, and `AirPlayTV`.
 

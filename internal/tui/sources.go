@@ -14,7 +14,7 @@ import (
 // stepping their keys, validating submissions, and deleting sources.
 
 func (m *App) addStep(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if msg.String() == "k" {
+	if msg.String() == "k" || msg.String() == "t" {
 		kind := store.SourceM3U
 		if m.addForm.kind == store.SourceM3U {
 			kind = store.SourceXtream
@@ -50,7 +50,7 @@ func (m *App) sourcesStep(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc":
 		m.mode = modeMain
 		return m, nil
-	case "a":
+	case "a", "A", "n", "+":
 		m.openAdd(store.SourceM3U)
 		return m, nil
 	case "enter":
@@ -59,7 +59,7 @@ func (m *App) sourcesStep(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.mode = modeMain
 		}
 		return m, nil
-	case "r":
+	case "r", "R":
 		if item, ok := m.srcOverlay.SelectedItem().(sourceListItem); ok {
 			m.startSourceLoad(item.idx)
 			if name, ok := m.cfg.SourceName(item.idx); ok {
@@ -67,7 +67,7 @@ func (m *App) sourcesStep(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
-	case "d":
+	case "d", "D", "delete":
 		if item, ok := m.srcOverlay.SelectedItem().(sourceListItem); ok {
 			m.deleteSource(item.idx)
 		}

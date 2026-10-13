@@ -68,12 +68,12 @@ func (m *App) epgStep(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc":
 		m.mode = modeMain
 		return m, nil
-	case "up":
+	case "up", "k":
 		if m.epg.scroll > 0 {
 			m.epg.scroll--
 		}
 		return m, nil
-	case "down":
+	case "down", "j":
 		if m.epg.scroll < len(m.epg.progs)-1 {
 			m.epg.scroll++
 		}

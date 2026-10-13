@@ -726,15 +726,15 @@ func (m *App) airStep(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.startAirplay(ch)
 		return m, nil
-	case "r":
+	case "r", "R":
 		if m.airForm != nil && strings.TrimSpace(m.airForm.input.Value()) == "" {
 			m.startAirScan()
 			return m, nil
 		}
 		return m, m.airForm.Update(msg)
-	case "up", "down":
+	case "up", "down", "k", "j":
 		if m.airForm != nil && len(m.airForm.found) > 0 {
-			if msg.String() == "up" {
+			if msg.String() == "up" || msg.String() == "k" {
 				m.airForm.sel = (m.airForm.sel - 1 + len(m.airForm.found)) % len(m.airForm.found)
 			} else {
 				m.airForm.sel = (m.airForm.sel + 1) % len(m.airForm.found)

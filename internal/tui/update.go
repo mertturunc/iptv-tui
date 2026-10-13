@@ -142,38 +142,49 @@ func isDigit(s string) bool {
 }
 
 func (m *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// UX aliases for the main rails: vim-style h/j/k/l on top of the arrows, so
+	// both vocabularies work without crowding the text inputs in other modes.
+	if m.mode == modeMain {
+		switch msg.String() {
+		case "j":
+			msg = tea.KeyMsg{Type: tea.KeyDown}
+		case "k":
+			msg = tea.KeyMsg{Type: tea.KeyUp}
+		}
+	}
 	if model, cmd, ok := m.routeKey(msg); ok {
 		return model, cmd
 	}
 
 	switch msg.String() {
-	case "ctrl+c":
+	case "ctrl+c", "q", "Q":
 		m.flushAndSave()
 		m.stopMpvIfNotKept()
 		return m, tea.Quit
-	case "q":
-		m.flushAndSave()
-		m.stopMpvIfNotKept()
-		return m, tea.Quit
-	case "?":
+	case "?", "F1":
 		m.mode = modeHelp
 		return m, nil
-	case "/":
+	case "/", "ctrl+f":
 		m.mode = modeSearch
 		m.searchIn.SetValue(m.searchFilter)
 		return m, m.searchIn.Focus()
-	case "s":
+	case "s", "S":
 		m.openSources()
 		return m, nil
-	case "a":
+	case "a", "A", "n", "+":
+		// `A` opens AirPlay (below); keep `a` for add and `A` for Apple TV.
+		if msg.String() == "A" {
+			m.openAirplay()
+			return m, nil
+		}
 		m.openAdd(store.SourceM3U)
 		return m, nil
-	case "r":
+	case "r", "R":
 		if m.activeIdx >= 0 {
 			m.startSourceLoad(m.activeIdx)
 		}
 		return m, nil
-	case "e":
+	case "e", "i":
 		if !m.inSeries {
 			if ch, ok := m.selectedChannel(); ok {
 				m.openEpg(ch)
@@ -182,10 +193,10 @@ func (m *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
-	case "f":
+	case "f", "F", "*":
 		m.toggleFavOnSelected()
 		return m, nil
-	case "x":
+	case "x", "X":
 		stopped := false
 		if m.playing != nil {
 			m.setStatus("stopping "+m.playerName()+glyphEllipsis, false)
@@ -208,7 +219,7 @@ func (m *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.setStatus("nothing playing", false)
 		}
 		return m, nil
-	case "m":
+	case "m", "K":
 		kept := m.cfg.ToggleKeepMpvOnQuit()
 		m.cfg.Save()
 		state := "off"
@@ -233,7 +244,7 @@ func (m *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.focus = focusChannels
 		}
 		return m, nil
-	case "g":
+	case "g", "G":
 		m.focus = focusGroups
 		return m, nil
 	case "left", "h":
@@ -242,26 +253,38 @@ func (m *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "right", "l":
-		m.focus = focusChannels
+		if m.focus == focusGroups {
+			m.focus = focusChannels
+		}
 		return m, nil
-	case "enter":
+	case "[":
+		m.cycleMediaType(-1)
+		return m, nil
+	case "]":
+		m.cycleMediaType(1)
+		return m, nil
+	case "#":
+		m.numBuf = ""
+		m.setStatus("type channel number, then enter", false)
+		return m, nil
+	case "enter", " ", "space":
 		if m.numBuf != "" {
 			m.jumpToNumber()
 			return m, nil
 		}
 		return m.onActivate()
-	case "o":
+	case "o", "p":
 		// A stale digit buffer must not swallow a play request: digits are
 		// only a jump prefix for enter, so drop them here and play.
 		m.numBuf = ""
 		return m.onPlaySelected()
-	case "c":
+	case "c", "C":
 		m.openCast()
 		return m, nil
-	case "v":
+	case "v", "V":
 		m.openAirplay()
 		return m, nil
-	case "esc":
+	case "esc", "backspace":
 		if m.numBuf != "" {
 			m.numBuf = ""
 			m.setStatus("number entry cleared", false)
@@ -269,16 +292,15 @@ func (m *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		if m.inSeries {
 			m.exitSeries()
+			return m, nil
 		}
 		return m, nil
-	case "backspace":
+	case "delete":
+		// Delete is destructive in text fields elsewhere; here it only clears
+		// a pending numeric entry so it never quits the app by accident.
 		if m.numBuf != "" {
 			m.numBuf = ""
 			m.setStatus("number entry cleared", false)
-			return m, nil
-		}
-		if m.inSeries {
-			m.exitSeries()
 		}
 		return m, nil
 	default:
@@ -371,6 +393,27 @@ func (m *App) toggleFavOnSelected() {
 		m.setStatus("removed favorite: "+ch.Name, false)
 	}
 	m.rebuildItems()
+}
+
+// cycleMediaType moves Live/Movies/Series in the given direction, mirroring the
+// 1/2/3 shortcuts so arrow keys on the rails can reach the other tabs without
+// a separate gesture.
+func (m *App) cycleMediaType(delta int) {
+	if m.activeIdx < 0 {
+		return
+	}
+	src, ok := m.cfg.SourceAt(m.activeIdx)
+	if !ok || !src.Kind.IsXtream() {
+		return
+	}
+	order := []store.MediaType{store.Live, store.Movie, store.Series}
+	cur := 0
+	for i, t := range order {
+		if t == m.mediaType {
+			cur = i
+		}
+	}
+	m.setMediaType(order[(cur+delta+len(order))%len(order)])
 }
 
 func (m *App) setMediaType(t store.MediaType) {
